@@ -425,11 +425,26 @@ app.get('/payment-success', async (c) => {
   }
 });
 
+// 5B. Verify Admin Master Security Key
+app.post('/api/admin/verify-key', async (c) => {
+  try {
+    const { adminKey } = await c.req.json();
+    const expectedKey = process.env.ADMIN_SECRET_KEY || 'LynkZoneSecure2026!';
+    if (!adminKey || adminKey !== expectedKey) {
+      await new Promise((r) => setTimeout(r, 600)); // anti-bruteforce delay
+      return c.json({ valid: false, error: 'Unauthorized: Invalid Master Security Key.' }, 401);
+    }
+    return c.json({ valid: true });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // 5C. Admin Endpoint to Issue Real Paid Licenses (For WhatsApp / Local Banking Orders)
 app.post('/api/admin/issue-license', async (c) => {
   try {
     const { adminKey, email, planType = 'lifetime' } = await c.req.json();
-    const expectedKey = process.env.ADMIN_SECRET_KEY || 'lynkzone_admin_2026';
+    const expectedKey = process.env.ADMIN_SECRET_KEY || 'LynkZoneSecure2026!';
 
     if (!adminKey || adminKey !== expectedKey) {
       return c.json({ error: 'Unauthorized: Invalid admin key.' }, 401);
@@ -468,7 +483,7 @@ app.post('/api/admin/issue-license', async (c) => {
 app.post('/api/admin/list-licenses', async (c) => {
   try {
     const { adminKey } = await c.req.json();
-    const expectedKey = process.env.ADMIN_SECRET_KEY || 'lynkzone_admin_2026';
+    const expectedKey = process.env.ADMIN_SECRET_KEY || 'LynkZoneSecure2026!';
     if (!adminKey || adminKey !== expectedKey) {
       return c.json({ error: 'Unauthorized: Invalid admin key.' }, 401);
     }
@@ -479,7 +494,7 @@ app.post('/api/admin/list-licenses', async (c) => {
   }
 });
 
-// 5E. LynkZone WhatsApp Admin Web Portal (1-Click Issue & Copy Reply)
+// 5E. LynkZone WhatsApp Admin Web Portal (Gated Behind Master Security PIN)
 app.get('/admin', (c) => {
   return c.html(`
 <!DOCTYPE html>
@@ -487,7 +502,7 @@ app.get('/admin', (c) => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LynkZone Admin Portal - WhatsApp Order Activation</title>
+  <title>LynkZone Admin Portal - Protected Security Area</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -497,6 +512,8 @@ app.get('/admin', (c) => {
       padding: 30px 20px;
       display: flex;
       justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
     }
     .wrapper {
       width: 100%;
@@ -615,18 +632,45 @@ app.get('/admin', (c) => {
   </style>
 </head>
 <body>
-  <div class="wrapper">
+  <!-- ================= SCREEN 1: LOCKED SECURITY GATE ================= -->
+  <div id="loginGateCard" class="card" style="width: 100%; max-width: 440px; margin: 40px auto; text-align: center;">
+    <div style="width: 56px; height: 56px; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 16px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 28px;">
+      🛡️
+    </div>
+    <h2 style="font-size: 20px; color: #fff; margin: 0 0 6px;">LynkZone Admin Portal</h2>
+    <p style="color: #94a3b8; font-size: 12px; margin-bottom: 22px;">Restricted security area. Please enter your Master Security PIN to unlock.</p>
+
+    <form id="authForm">
+      <div class="form-group" style="text-align: left;">
+        <label>Master Security PIN / Key</label>
+        <input type="password" id="authPinInput" placeholder="Enter Admin Security PIN..." required autofocus />
+      </div>
+      <div id="authErrorMsg" style="display: none; color: #ef4444; font-size: 12px; margin-bottom: 12px; padding: 10px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;"></div>
+      <button type="submit" id="authSubmitBtn" class="btn" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+        🔒 Authenticate & Unlock Portal
+      </button>
+    </form>
+  </div>
+
+  <!-- ================= SCREEN 2: AUTHENTICATED DASHBOARD (HIDDEN UNTIL UNLOCKED) ================= -->
+  <div id="adminDashboard" class="wrapper" style="display: none;">
+    <!-- Top Bar with Authenticated Badge & Logout -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 10px 16px; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px;">
+      <div style="display: flex; items-center: center; gap: 8px;">
+        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; margin-top: 4px;"></span>
+        <span style="font-size: 12px; font-weight: 700; color: #10b981;">LynkZone Master Admin • Authenticated Session</span>
+      </div>
+      <button type="button" id="logoutBtn" style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 6px; cursor: pointer;">
+        🚪 Lock / Log Out
+      </button>
+    </div>
+
     <div class="card">
-      <span class="badge">LynkZone Admin Portal</span>
-      <h1>WhatsApp Manual Order Activation</h1>
+      <span class="badge">WhatsApp Order Activation</span>
+      <h1>Issue Pro License</h1>
       <p>When a customer pays via Easypaisa, JazzCash, or Bank, issue their verified Pro license here in 1 click.</p>
 
       <form id="issueForm">
-        <div class="form-group">
-          <label>Admin Security PIN / Key</label>
-          <input type="password" id="adminKey" value="lynkzone_admin_2026" required />
-        </div>
-
         <div class="form-group">
           <label>Customer Email Address (from WhatsApp)</label>
           <input type="email" id="customerEmail" placeholder="customer@example.com" required />
@@ -692,6 +736,14 @@ app.get('/admin', (c) => {
   </div>
 
   <script>
+    const loginGateCard = document.getElementById('loginGateCard');
+    const adminDashboard = document.getElementById('adminDashboard');
+    const authForm = document.getElementById('authForm');
+    const authPinInput = document.getElementById('authPinInput');
+    const authErrorMsg = document.getElementById('authErrorMsg');
+    const authSubmitBtn = document.getElementById('authSubmitBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
     const form = document.getElementById('issueForm');
     const resultBox = document.getElementById('resultBox');
     const displayKey = document.getElementById('displayKey');
@@ -701,8 +753,67 @@ app.get('/admin', (c) => {
     const refreshBtn = document.getElementById('refreshBtn');
     const licensesTbody = document.getElementById('licensesTbody');
 
+    function getSavedKey() {
+      return sessionStorage.getItem('lynkzone_admin_pin') || '';
+    }
+
+    function setSavedKey(key) {
+      sessionStorage.setItem('lynkzone_admin_pin', key);
+    }
+
+    function clearSavedKey() {
+      sessionStorage.removeItem('lynkzone_admin_pin');
+    }
+
+    async function verifyAndUnlock(pin) {
+      authSubmitBtn.innerText = 'Verifying...';
+      authSubmitBtn.disabled = true;
+      authErrorMsg.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/verify-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminKey: pin })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.valid) {
+          setSavedKey(pin);
+          loginGateCard.style.display = 'none';
+          adminDashboard.style.display = 'block';
+          loadLicenses();
+        } else {
+          authErrorMsg.innerText = '❌ Access Denied: Invalid Master Security PIN.';
+          authErrorMsg.style.display = 'block';
+          clearSavedKey();
+        }
+      } catch (err) {
+        authErrorMsg.innerText = '❌ Server connection error.';
+        authErrorMsg.style.display = 'block';
+      } finally {
+        authSubmitBtn.innerText = '🔒 Authenticate & Unlock Portal';
+        authSubmitBtn.disabled = false;
+      }
+    }
+
+    authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pin = authPinInput.value.trim();
+      if (pin) verifyAndUnlock(pin);
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      clearSavedKey();
+      adminDashboard.style.display = 'none';
+      loginGateCard.style.display = 'block';
+      authPinInput.value = '';
+    });
+
     async function loadLicenses() {
-      const adminKey = document.getElementById('adminKey').value;
+      const adminKey = getSavedKey();
+      if (!adminKey) return;
+
       try {
         const res = await fetch('/api/admin/list-licenses', {
           method: 'POST',
@@ -729,10 +840,16 @@ app.get('/admin', (c) => {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const adminKey = document.getElementById('adminKey').value;
+      const adminKey = getSavedKey();
       const email = document.getElementById('customerEmail').value;
       const planType = document.getElementById('planType').value;
       const submitBtn = document.getElementById('submitBtn');
+
+      if (!adminKey) {
+        alert('Session expired. Please log in again.');
+        logoutBtn.click();
+        return;
+      }
 
       submitBtn.innerText = 'Issuing...';
       submitBtn.disabled = true;
@@ -767,7 +884,6 @@ Enjoy unlimited 1-click job autofills and AI Copilot! If you ever need help, fee
           replyText.value = message;
           resultBox.style.display = 'block';
           form.reset();
-          document.getElementById('adminKey').value = adminKey;
           loadLicenses();
         } else {
           alert('Error: ' + (data.error || 'Failed to issue license'));
@@ -793,7 +909,12 @@ Enjoy unlimited 1-click job autofills and AI Copilot! If you ever need help, fee
     });
 
     refreshBtn.addEventListener('click', loadLicenses);
-    loadLicenses();
+
+    // Auto-login if session already has valid key
+    const savedPin = getSavedKey();
+    if (savedPin) {
+      verifyAndUnlock(savedPin);
+    }
   </script>
 </body>
 </html>
