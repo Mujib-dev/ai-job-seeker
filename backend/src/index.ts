@@ -37,6 +37,63 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const port = Number(process.env.PORT) || 3000;
 
 // 1. Local Test Job Application Form
+app.get('/privacy', (c) => {
+  return c.html(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - AI Job Seeker by LynkZone</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 40px 20px; line-height: 1.6; }
+    .container { max-width: 760px; margin: 0 auto; background: #1e293b; padding: 36px; border-radius: 16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    h1 { color: #38bdf8; margin-top: 0; font-size: 26px; }
+    h3 { color: #818cf8; margin-top: 24px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+    p, li { color: #cbd5e1; font-size: 14px; }
+    ul { padding-left: 20px; }
+    .badge { display: inline-block; background: #0284c7; color: white; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #334155; font-size: 13px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">Official Privacy Policy</div>
+    <h1>AI Job Seeker by LynkZone</h1>
+    <p><strong>Last Updated:</strong> November 2026 | <strong>Developer:</strong> LynkZone</p>
+    
+    <p>AI Job Seeker by LynkZone ("the Extension") respects and protects your privacy. This policy outlines how information is handled when using the Chrome extension.</p>
+    
+    <h3>1. Local-First Architecture & Data Collection</h3>
+    <p>All personal profile details (including name, email, phone number, employment history, and education) are stored <strong>strictly locally on your personal device</strong> using Chrome's secure storage API (<code>chrome.storage.local</code>).</p>
+    <ul>
+      <li><strong>No Selling of Data:</strong> LynkZone never sells, rents, monetizes, or shares your personal data or application history with third parties, brokers, or advertisers.</li>
+      <li><strong>No Tracking:</strong> We do not track your browsing activity across other websites.</li>
+    </ul>
+
+    <h3>2. Permissions Justification</h3>
+    <ul>
+      <li><strong><code>activeTab</code> & <code>scripting</code>:</strong> Required only when you explicitly click "Autofill" to inspect form input fields on the active job application tab and populate them with your saved profile.</li>
+      <li><strong><code>storage</code>:</strong> Used to save your job profile settings, custom answers, and application history locally on your device.</li>
+      <li><strong>Host Permissions:</strong> Allows the autofill helper script to work across different company hiring portals (such as Greenhouse, Lever, Workday, LinkedIn, and Indeed).</li>
+    </ul>
+
+    <h3>3. AI Processing & Third-Party Services</h3>
+    <p>When using the AI Question Copilot or ATS Cover Letter generator, only the job description context and relevant prompt are processed securely via AI APIs to generate responses. Payment information is securely processed by Stripe or coordinated directly through official channels; payment card details are never handled or stored by the extension.</p>
+
+    <h3>4. User Data Control</h3>
+    <p>You have full ownership of your data. You can edit, export, or permanently erase your profile and tracker history at any time from the Extension's Settings tab. Uninstalling the extension immediately purges all local storage.</p>
+
+    <div class="footer">
+      <strong>Contact:</strong> mujiburrahman.dev@gmail.com | <strong>WhatsApp:</strong> +92 348 1974606 | <strong>Organization:</strong> LynkZone
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
+// 1. Local Test Job Application Form
 app.get('/test', (c) => {
   try {
     const candidatePaths = [
