@@ -39,8 +39,9 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
   const [subscription, setSubscription] = useState<UserSubscription>({
     isPro: false,
-    dailyUsageCount: 0,
-    lastUsageDate: new Date().toISOString().split('T')[0],
+    monthlyUsageCount: 0,
+    lastUsageMonth: new Date().toISOString().slice(0, 7),
+    monthlyLimit: 50,
   });
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(false);
@@ -158,8 +159,10 @@ export default function App() {
 
   // Trigger 1-Click Form Autofill
   const handleTriggerAutofill = async () => {
-    if (!subscription.isPro && subscription.dailyUsageCount >= 5) {
-      showToast('Daily free limit reached (5/5). Upgrade to Pro for unlimited autofill!');
+    const freeLimit = subscription.monthlyLimit || 50;
+    const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
+    if (!subscription.isPro && currentUsage >= freeLimit) {
+      showToast(`Monthly free limit reached (${freeLimit}/${freeLimit}). Upgrade to Pro for unlimited autofills!`);
       return;
     }
 
@@ -215,8 +218,10 @@ export default function App() {
       return;
     }
 
-    if (!subscription.isPro && subscription.dailyUsageCount >= 5) {
-      showToast('Daily free limit reached. Upgrade to Pro for unlimited AI answers!');
+    const freeLimit = subscription.monthlyLimit || 50;
+    const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
+    if (!subscription.isPro && currentUsage >= freeLimit) {
+      showToast('Monthly free limit reached. Upgrade to Pro for unlimited AI answers!');
       return;
     }
 
@@ -243,8 +248,10 @@ export default function App() {
 
   // Handle Cover Letter
   const handleGenerateCoverLetter = async () => {
-    if (!subscription.isPro && subscription.dailyUsageCount >= 5) {
-      showToast('Daily free limit reached. Upgrade to Pro for unlimited cover letters!');
+    const freeLimit = subscription.monthlyLimit || 50;
+    const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
+    if (!subscription.isPro && currentUsage >= freeLimit) {
+      showToast('Monthly free limit reached. Upgrade to Pro for unlimited cover letters!');
       return;
     }
 
@@ -483,7 +490,7 @@ export default function App() {
             >
               <Zap className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-800 fill-amber-700'}`} />
               <span>
-                {Math.max(0, (subscription.dailyLimit || 5) - subscription.dailyUsageCount)} left of {subscription.dailyLimit || 5} free
+                {Math.max(0, (subscription.monthlyLimit || 50) - (subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0))} left of {subscription.monthlyLimit || 50} free
               </span>
             </button>
           )}
@@ -572,44 +579,45 @@ export default function App() {
               </button>
             </div>
 
-            {/* Free Tier Daily Usage Indicator (Shows how many left out of daily limit) */}
-            {!subscription.isPro && (
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Daily Free Applications</span>
-                  </span>
-                  <span className="font-bold text-amber-300 text-[11px]">
-                    {Math.max(0, (subscription.dailyLimit || 5) - subscription.dailyUsageCount)} left out of {subscription.dailyLimit || 5} today
-                  </span>
+            {/* Free Tier Monthly Usage Indicator (Shows how many left out of monthly limit) */}
+            {!subscription.isPro && (() => {
+              const freeLimit = subscription.monthlyLimit || 50;
+              const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
+              const remaining = Math.max(0, freeLimit - currentUsage);
+              const isMaxed = currentUsage >= freeLimit;
+              const percent = Math.min(100, (currentUsage / freeLimit) * 100);
+
+              return (
+                <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Monthly Free Applications</span>
+                    </span>
+                    <span className="font-bold text-amber-300 text-[11px]">
+                      {remaining} left out of {freeLimit} this month
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                    <div
+                      className={`h-full transition-all duration-300 rounded-full ${
+                        isMaxed ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span>{currentUsage} of {freeLimit} used this month</span>
+                    <button
+                      onClick={() => setShowPricingModal(true)}
+                      className="text-cyan-400 hover:underline cursor-pointer font-medium"
+                    >
+                      Get Unlimited →
+                    </button>
+                  </div>
                 </div>
-                <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-                  <div
-                    className={`h-full transition-all duration-300 rounded-full ${
-                      subscription.dailyUsageCount >= (subscription.dailyLimit || 5)
-                        ? 'bg-red-500'
-                        : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
-                    }`}
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (subscription.dailyUsageCount / (subscription.dailyLimit || 5)) * 100
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-500">
-                  <span>{subscription.dailyUsageCount} of {subscription.dailyLimit || 5} used today</span>
-                  <button
-                    onClick={() => setShowPricingModal(true)}
-                    className="text-cyan-400 hover:underline cursor-pointer font-medium"
-                  >
-                    Get Unlimited →
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Primary Autofill Action */}
             <button
@@ -1512,7 +1520,7 @@ export default function App() {
               <p className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-700 font-medium'}`}>
                 {subscription.isPro
                   ? '✨ You have unlimited 1-click form autofills, ATS cover letters, and custom AI responses.'
-                  : `Free tier: ${Math.max(0, (subscription.dailyLimit || 5) - subscription.dailyUsageCount)} left out of ${subscription.dailyLimit || 5} today (${subscription.dailyUsageCount} used). Resets at midnight.`}
+                  : `Free tier: ${Math.max(0, (subscription.monthlyLimit || 50) - (subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0))} left out of ${subscription.monthlyLimit || 50} this month (${subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0} used). Resets on the 1st of each month.`}
               </p>
 
               <div className="flex gap-2 pt-1">

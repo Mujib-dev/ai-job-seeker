@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body {
+    width: 1280px;
+    height: 800px;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #090d16 65%, #030712 100%);
+    color: #f8fafc;
+    padding: 30px 48px;
+  }
+  .banner { text-align: center; margin-bottom: 24px; }
+  .pill {
+    display: inline-block;
+    padding: 6px 16px;
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid #10b981;
+    border-radius: 999px;
+    color: #6ee7b7;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffffff 40%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  p.subtitle { font-size: 15px; color: #94a3b8; }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-num { font-size: 28px; font-weight: 800; color: #38bdf8; }
+  .stat-label { font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+  .table-box {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+  }
+  table { width: 100%; border-collapse: collapse; text-align: left; }
+  th {
+    background: #1e293b;
+    padding: 14px 20px;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+    border-bottom: 1px solid #334155;
+  }
+  td {
+    padding: 16px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid #1e293b;
+    color: #e2e8f0;
+  }
+  .company-cell { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .co-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .badge-applied { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6; }
+  .badge-interview { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7; }
+  .badge-offer { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <div class="pill">📊 Built-in Application Tracker</div>
+    <h1>Track Every Application & Follow-Up in One Place</h1>
+    <p class="subtitle">Automatically logs job titles, companies, dates, and interview status as you apply.</p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">48</div>
+      <div class="stat-label">Applications Sent</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color: #a855f7;">6</div>
+      <div class="stat-label">Interviews Scheduled</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color: #34d399;">2</div>
+      <div class="stat-label">Offers Received</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color: #f59e0b;">18 hrs</div>
+      <div class="stat-label">Typing Time Saved</div>
+    </div>
+  </div>
+
+  <div class="table-box">
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Role</th>
+          <th>Platform</th>
+          <th>Date Applied</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="company-cell">
+              <div class="co-icon" style="background: #3b82f6; color: white;">G</div>
+              <span>Google</span>
+            </div>
+          </td>
+          <td>Senior Frontend Engineer</td>
+          <td>Google Careers</td>
+          <td>Today, 2:15 PM</td>
+          <td><span class="badge badge-interview">Interviewing</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="company-cell">
+              <div class="co-icon" style="background: #10b981; color: white;">M</div>
+              <span>Microsoft</span>
+            </div>
+          </td>
+          <td>Full Stack Cloud Architect</td>
+          <td>LinkedIn Easy Apply</td>
+          <td>Yesterday</td>
+          <td><span class="badge badge-interview">Technical Screen</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="company-cell">
+              <div class="co-icon" style="background: #f59e0b; color: white;">A</div>
+              <span>Amazon Web Services</span>
+            </div>
+          </td>
+          <td>Software Development Engineer II</td>
+          <td>Amazon Jobs</td>
+          <td>3 days ago</td>
+          <td><span class="badge badge-offer">Offer Stage</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="company-cell">
+              <div class="co-icon" style="background: #6366f1; color: white;">C</div>
+              <span>CloudScale Technologies</span>
+            </div>
+          </td>
+          <td>Senior Full Stack Engineer</td>
+          <td>Greenhouse.io</td>
+          <td>4 days ago</td>
+          <td><span class="badge badge-applied">Applied</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

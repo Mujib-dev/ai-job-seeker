@@ -306,19 +306,20 @@ function injectFloatingWidget() {
     try {
       const profile = await getUserProfile();
       const sub = await getUserSubscription();
-      const limit = sub.dailyLimit || 5;
+      const limit = sub.monthlyLimit || 50;
+      const count = sub.monthlyUsageCount || 0;
 
-      if (!sub.isPro && sub.dailyUsageCount >= limit) {
-        showWidgetToast(container, `⚠️ 0 left out of ${limit} today. Click extension icon to upgrade.`);
+      if (!sub.isPro && count >= limit) {
+        showWidgetToast(container, `⚠️ 0 left out of ${limit} this month. Click extension icon to upgrade.`);
         btn.style.opacity = '1';
-        btn.innerHTML = `<span>0 Left Today</span>`;
+        btn.innerHTML = `<span>0 Left This Month</span>`;
         setTimeout(resetBtn, 2500);
         return;
       }
 
       const result = autofillForm(profile);
       await incrementUsage();
-      const remaining = Math.max(0, limit - (sub.dailyUsageCount + 1));
+      const remaining = Math.max(0, limit - (count + 1));
 
       btn.style.opacity = '1';
       btn.innerHTML = `
@@ -330,7 +331,7 @@ function injectFloatingWidget() {
 
       const toastMsg = sub.isPro
         ? `✨ Successfully filled ${result.filledFieldsCount} fields!`
-        : `✨ Filled ${result.filledFieldsCount} fields! (${remaining} left out of ${limit} today)`;
+        : `✨ Filled ${result.filledFieldsCount} fields! (${remaining} left out of ${limit} this month)`;
       showWidgetToast(container, toastMsg);
       setTimeout(resetBtn, 2500);
     } catch (err: any) {

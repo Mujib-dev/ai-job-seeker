@@ -63,9 +63,12 @@ export interface JobApplication {
 
 export interface UserSubscription {
   isPro: boolean;
-  dailyUsageCount: number;
-  lastUsageDate: string;
-  dailyLimit?: number; // Configurable free daily limit (defaults to 5)
+  monthlyUsageCount: number;
+  lastUsageMonth: string;
+  monthlyLimit?: number; // Configurable free monthly limit (defaults to 50)
+  dailyUsageCount?: number;
+  lastUsageDate?: string;
+  dailyLimit?: number;
 }
 
 export const DEFAULT_USER_PROFILE: UserProfile = {

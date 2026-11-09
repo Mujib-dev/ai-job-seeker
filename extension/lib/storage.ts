@@ -68,37 +68,49 @@ export async function deleteJobApplication(id: string): Promise<void> {
 
 export async function getUserSubscription(): Promise<UserSubscription> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.SUBSCRIPTION);
+  const currentMonth = new Date().toISOString().slice(0, 7); // e.g. "2026-11"
   const today = new Date().toISOString().split('T')[0];
 
   const raw = result[STORAGE_KEYS.SUBSCRIPTION];
   const sub: UserSubscription = {
     isPro: false,
+    monthlyUsageCount: 0,
+    lastUsageMonth: currentMonth,
+    monthlyLimit: 50,
     dailyUsageCount: 0,
     lastUsageDate: today,
-    dailyLimit: 5,
+    dailyLimit: 50,
     ...(raw || {}),
   };
 
-  // Reset daily quota if new day
-  if (sub.lastUsageDate !== today) {
-    sub.dailyUsageCount = 0;
-    sub.lastUsageDate = today;
+  // Reset monthly quota if new month
+  if (sub.lastUsageMonth !== currentMonth) {
+    sub.monthlyUsageCount = 0;
+    sub.lastUsageMonth = currentMonth;
     await chrome.storage.local.set({ [STORAGE_KEYS.SUBSCRIPTION]: sub });
   }
+
+  // Ensure dailyUsageCount mirrors monthlyUsageCount for backwards compatibility
+  sub.dailyUsageCount = sub.monthlyUsageCount;
+  sub.dailyLimit = sub.monthlyLimit || 50;
 
   return sub;
 }
 
-export async function setDailyFreeLimit(limit: number): Promise<UserSubscription> {
+export async function setMonthlyFreeLimit(limit: number): Promise<UserSubscription> {
   const sub = await getUserSubscription();
-  sub.dailyLimit = Math.max(1, limit);
+  sub.monthlyLimit = Math.max(1, limit);
+  sub.dailyLimit = sub.monthlyLimit;
   await chrome.storage.local.set({ [STORAGE_KEYS.SUBSCRIPTION]: sub });
   return sub;
 }
 
+export const setDailyFreeLimit = setMonthlyFreeLimit;
+
 export async function incrementUsage(): Promise<UserSubscription> {
   const sub = await getUserSubscription();
-  sub.dailyUsageCount += 1;
+  sub.monthlyUsageCount = (sub.monthlyUsageCount || 0) + 1;
+  sub.dailyUsageCount = sub.monthlyUsageCount;
   await chrome.storage.local.set({ [STORAGE_KEYS.SUBSCRIPTION]: sub });
   return sub;
 }
@@ -109,12 +121,15 @@ export async function setProStatus(isPro: boolean): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.SUBSCRIPTION]: sub });
 }
 
-export async function resetDailyUsage(): Promise<UserSubscription> {
+export async function resetMonthlyUsage(): Promise<UserSubscription> {
   const sub = await getUserSubscription();
+  sub.monthlyUsageCount = 0;
   sub.dailyUsageCount = 0;
   await chrome.storage.local.set({ [STORAGE_KEYS.SUBSCRIPTION]: sub });
   return sub;
 }
+
+export const resetDailyUsage = resetMonthlyUsage;
 
 export async function getAppTheme(): Promise<'dark' | 'light'> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
