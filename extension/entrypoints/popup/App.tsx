@@ -24,7 +24,7 @@ import {
   Moon
 } from 'lucide-react';
 import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription } from '../../lib/types';
-import { getUserProfile, saveUserProfile, getJobApplications, saveJobApplication, updateApplicationStatus, deleteJobApplication, getUserSubscription, incrementUsage, setProStatus, resetDailyUsage, getAppTheme, setAppTheme } from '../../lib/storage';
+import { getUserProfile, saveUserProfile, getJobApplications, saveJobApplication, updateApplicationStatus, deleteJobApplication, getUserSubscription, incrementUsage, setProStatus, resetDailyUsage, getAppTheme, setAppTheme, getFloatingWidgetEnabled, setFloatingWidgetEnabled } from '../../lib/storage';
 import { generateAIAnswer, generateAICoverLetter } from '../../lib/ai';
 import { API_BASE_URL } from '../../lib/config';
 
@@ -68,6 +68,7 @@ export default function App() {
   // Payment & License Verification State
   const [licenseInput, setLicenseInput] = useState('');
   const [activatingLicense, setActivatingLicense] = useState(false);
+  const [showFloatingWidget, setShowFloatingWidget] = useState(true);
 
   useEffect(() => {
     loadInitialData();
@@ -82,6 +83,8 @@ export default function App() {
     } else {
       document.body.classList.remove('theme-light');
     }
+    const fw = await getFloatingWidgetEnabled();
+    setShowFloatingWidget(fw);
     const p = await getUserProfile();
     setProfile(p);
     const s = await getUserSubscription();
@@ -100,6 +103,13 @@ export default function App() {
     }
     await setAppTheme(next);
     showToast(next === 'light' ? '☀️ Light theme activated' : '🌙 Dark theme activated');
+  };
+
+  const handleToggleFloatingWidget = async () => {
+    const nextVal = !showFloatingWidget;
+    setShowFloatingWidget(nextVal);
+    await setFloatingWidgetEnabled(nextVal);
+    showToast(nextVal ? '⚡ On-screen floating button enabled' : '🚫 On-screen floating button disabled');
   };
 
   const showToast = (msg: string) => {
@@ -1568,6 +1578,30 @@ export default function App() {
                   <Sun className="w-3 h-3" /> Light
                 </button>
               </div>
+            </div>
+
+            {/* On-Screen Floating Button Toggle */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
+              isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div>
+                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>On-Screen Floating Button</h4>
+                <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Show 1-click floating button on web pages (default ON).</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleFloatingWidget}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                  showFloatingWidget ? 'bg-indigo-600' : isDark ? 'bg-slate-800' : 'bg-slate-300'
+                }`}
+                title={showFloatingWidget ? 'Click to disable' : 'Click to enable'}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showFloatingWidget ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* License Key & Account Activation */}

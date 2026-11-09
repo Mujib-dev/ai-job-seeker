@@ -19,10 +19,43 @@ export default defineContentScript({
         sendResponse({ filledCount: result.filledFieldsCount, total: result.totalFieldsFound });
         return true;
       }
+
+      if (request.type === 'SET_FLOATING_WIDGET_VISIBLE') {
+        const host = document.getElementById('ai-job-seeker-host');
+        if (request.enabled) {
+          if (!host) injectFloatingWidget();
+          else host.style.display = 'block';
+        } else {
+          if (host) host.style.display = 'none';
+        }
+        sendResponse({ success: true });
+        return true;
+      }
     });
 
-    // 2. Inject sleek floating trigger button into webpage using Shadow DOM
-    injectFloatingWidget();
+    // 2. Listen to storage changes so floating widget toggles on all open tabs in real time
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes['ai_job_seeker_settings']) {
+          const newSettings = changes['ai_job_seeker_settings'].newValue;
+          const host = document.getElementById('ai-job-seeker-host');
+          if (newSettings?.showFloatingWidget === false) {
+            if (host) host.style.display = 'none';
+          } else {
+            if (!host) injectFloatingWidget();
+            else host.style.display = 'block';
+          }
+        }
+      });
+    }
+
+    // 3. Inject sleek floating trigger button into webpage using Shadow DOM (default is ON)
+    chrome.storage.local.get('ai_job_seeker_settings', (result) => {
+      const settings = result['ai_job_seeker_settings'];
+      if (settings?.showFloatingWidget !== false) {
+        injectFloatingWidget();
+      }
+    });
   },
 });
 

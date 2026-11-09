@@ -140,3 +140,17 @@ export async function setAppTheme(theme: 'dark' | 'light'): Promise<void> {
   const current = (await chrome.storage.local.get(STORAGE_KEYS.SETTINGS))[STORAGE_KEYS.SETTINGS] || {};
   await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: { ...current, theme } });
 }
+
+export async function getFloatingWidgetEnabled(): Promise<boolean> {
+  const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
+  const settings = result[STORAGE_KEYS.SETTINGS];
+  // Default is true (enabled on screen)
+  return settings?.showFloatingWidget !== false;
+}
+
+export async function setFloatingWidgetEnabled(enabled: boolean): Promise<void> {
+  const current = (await chrome.storage.local.get(STORAGE_KEYS.SETTINGS))[STORAGE_KEYS.SETTINGS] || {};
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.SETTINGS]: { ...current, showFloatingWidget: enabled },
+  });
+}
