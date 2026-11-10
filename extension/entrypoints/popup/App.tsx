@@ -24,6 +24,7 @@ import {
   GraduationCap,
   MessageSquare,
   RefreshCw,
+  HelpCircle,
 } from 'lucide-react';
 import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription } from '../../lib/types';
 import {
@@ -70,6 +71,7 @@ export default function App() {
   const isDark = theme === 'dark';
   const [activeTab, setActiveTab] = useState<Tab>('autofill');
   const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [pricingTier, setPricingTier] = useState<'monthly' | 'lifetime'>('lifetime');
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
   const [subscription, setSubscription] = useState<UserSubscription>({
@@ -126,6 +128,35 @@ export default function App() {
     setSubscription(s);
     const a = await getJobApplications();
     setApplications(a);
+
+    // If profile is empty (first time install), redirect directly to Profile tab!
+    if (!p.personal?.firstName && !p.personal?.email) {
+      setActiveTab('profile');
+    }
+
+    // Prompt new customers with the 3-step guide on first install
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        const guideRes = await chrome.storage.local.get('ai_job_seeker_has_seen_guide');
+        if (!guideRes.ai_job_seeker_has_seen_guide) {
+          setShowGuideModal(true);
+        }
+      }
+    } catch {}
+  };
+
+  const handleCloseGuide = async () => {
+    setShowGuideModal(false);
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await chrome.storage.local.set({ ai_job_seeker_has_seen_guide: true });
+      }
+    } catch {}
+  };
+
+  const handleGuideGoToProfile = async () => {
+    await handleCloseGuide();
+    setActiveTab('profile');
   };
 
   const handleToggleTheme = async () => {
@@ -204,6 +235,13 @@ export default function App() {
 
   // Trigger 1-Click Form Autofill
   const handleTriggerAutofill = async () => {
+    // Check if profile is empty
+    if (!profile.personal?.firstName && !profile.personal?.email) {
+      showToast('Please enter your profile details first!');
+      setActiveTab('profile');
+      return;
+    }
+
     const freeLimit = subscription.monthlyLimit || 50;
     const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
     if (!subscription.isPro && currentUsage >= freeLimit) {
@@ -505,7 +543,20 @@ export default function App() {
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Quick Guide (?) Button */}
+          <button
+            onClick={() => setShowGuideModal(true)}
+            className={`p-1.5 rounded-full border transition cursor-pointer flex items-center justify-center ${
+              isDark
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-cyan-300 border-slate-700 shadow-sm'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+            }`}
+            title="How It Works Guide"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+          </button>
+
           {/* Theme Switcher */}
           <button
             onClick={handleToggleTheme}
@@ -534,7 +585,7 @@ export default function App() {
           ) : (
             <button
               onClick={() => setShowPricingModal(true)}
-              className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer shadow-sm ${
+              className={`flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer shadow-sm ${
                 isDark
                   ? 'font-semibold text-amber-300 bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border-amber-500/30'
                   : 'font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border-amber-400'
@@ -545,6 +596,19 @@ export default function App() {
               <span>{remainingQuota} left</span>
             </button>
           )}
+
+          {/* Close Popup (X) Button */}
+          <button
+            onClick={() => window.close()}
+            className={`p-1.5 rounded-full border transition cursor-pointer flex items-center justify-center ${
+              isDark
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border-slate-700 shadow-sm'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border-slate-300 shadow-sm'
+            }`}
+            title="Close popup"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </header>
 
@@ -645,6 +709,12 @@ export default function App() {
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Open any job posting on LinkedIn, Indeed, etc., then click below.
                   </p>
+                  <button
+                    onClick={() => setShowGuideModal(true)}
+                    className="text-[10px] text-cyan-400 hover:text-cyan-300 hover:underline mt-1 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <HelpCircle className="w-3 h-3" /> New here? View 3-step guide →
+                  </button>
                 </div>
                 <button
                   onClick={detectActiveTabInfo}
@@ -781,6 +851,19 @@ export default function App() {
         {/* ================= TAB 2: MULTI-CATEGORY PROFILE ================= */}
         {activeTab === 'profile' && (
           <div className="space-y-3.5">
+            {/* First Time Welcome Banner */}
+            {!profile.personal?.firstName && !profile.personal?.email && (
+              <div className="p-3 rounded-xl bg-gradient-to-r from-indigo-500/20 via-cyan-500/15 to-transparent border border-indigo-500/30 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <h4 className="font-bold text-white">Welcome! Enter your details once</h4>
+                  <p className="text-slate-300 text-[11px] mt-0.5">
+                    Fill in your details below so AI Job Seeker can autofill job applications for you automatically.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-white">Your Profile</h3>
@@ -825,6 +908,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.firstName}
+                      placeholder="e.g. Mujib"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, firstName: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -834,6 +918,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.lastName}
+                      placeholder="e.g. Ur Rahman"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, lastName: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -846,6 +931,7 @@ export default function App() {
                     <input
                       type="email"
                       value={profile.personal.email}
+                      placeholder="e.g. mujiburrahman.dev@gmail.com"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, email: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -855,6 +941,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.phone}
+                      placeholder="e.g. +92 348 1974606"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, phone: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -877,6 +964,7 @@ export default function App() {
                   <input
                     type="text"
                     value={profile.personal.address}
+                    placeholder="e.g. LynkZone Tech Center, 123 Main St"
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, address: e.target.value } })}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -888,6 +976,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.city}
+                      placeholder="e.g. Peshawar"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, city: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -897,6 +986,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.state}
+                      placeholder="e.g. KP"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, state: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -906,6 +996,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.personal.zipCode}
+                      placeholder="e.g. 25000"
                       onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, zipCode: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -917,6 +1008,7 @@ export default function App() {
                   <input
                     type="text"
                     value={profile.personal.country}
+                    placeholder="e.g. Pakistan"
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, country: e.target.value } })}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -934,7 +1026,7 @@ export default function App() {
                     type="url"
                     value={profile.personal.linkedIn}
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, linkedIn: e.target.value } })}
-                    placeholder="https://linkedin.com/in/username"
+                    placeholder="https://linkedin.com/in/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -944,7 +1036,7 @@ export default function App() {
                     type="url"
                     value={profile.personal.github}
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, github: e.target.value } })}
-                    placeholder="https://github.com/username"
+                    placeholder="https://github.com/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -954,7 +1046,7 @@ export default function App() {
                     type="url"
                     value={profile.personal.portfolio}
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, portfolio: e.target.value } })}
-                    placeholder="https://yourportfolio.com"
+                    placeholder="https://lynkzone.dev"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -964,7 +1056,7 @@ export default function App() {
                     type="text"
                     value={profile.personal.twitter || ''}
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, twitter: e.target.value } })}
-                    placeholder="https://x.com/username"
+                    placeholder="https://x.com/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -981,6 +1073,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.work.currentTitle}
+                      placeholder="e.g. Lead Software Engineer"
                       onChange={(e) => setProfile({ ...profile, work: { ...profile.work, currentTitle: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -990,6 +1083,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.work.currentCompany}
+                      placeholder="e.g. LynkZone"
                       onChange={(e) => setProfile({ ...profile, work: { ...profile.work, currentCompany: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1002,6 +1096,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.work.yearsExperience}
+                      placeholder="e.g. 5"
                       onChange={(e) => setProfile({ ...profile, work: { ...profile.work, yearsExperience: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1011,6 +1106,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.work.salaryExpectations}
+                      placeholder="e.g. $80,000 / year or Negotiable"
                       onChange={(e) => setProfile({ ...profile, work: { ...profile.work, salaryExpectations: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1047,7 +1143,8 @@ export default function App() {
                     <label className="text-[10px] text-slate-400">Notice Period</label>
                     <input
                       type="text"
-                      value={profile.work.noticePeriod || '2 weeks'}
+                      value={profile.work.noticePeriod || 'Immediate'}
+                      placeholder="e.g. 2 weeks or Immediate"
                       onChange={(e) => setProfile({ ...profile, work: { ...profile.work, noticePeriod: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1059,6 +1156,7 @@ export default function App() {
                   <textarea
                     rows={3}
                     value={profile.work.summary}
+                    placeholder="e.g. Full-stack software engineer with 5+ years building web and mobile applications..."
                     onChange={(e) => setProfile({ ...profile, work: { ...profile.work, summary: e.target.value } })}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200 resize-none"
                   />
@@ -1075,6 +1173,7 @@ export default function App() {
                   <input
                     type="text"
                     value={profile.education.school}
+                    placeholder="e.g. University of California, Berkeley"
                     onChange={(e) => setProfile({ ...profile, education: { ...profile.education, school: e.target.value } })}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -1109,6 +1208,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.education.graduationYear}
+                      placeholder="e.g. 2024"
                       onChange={(e) => setProfile({ ...profile, education: { ...profile.education, graduationYear: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1118,6 +1218,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.education.gpa}
+                      placeholder="e.g. 3.8"
                       onChange={(e) => setProfile({ ...profile, education: { ...profile.education, gpa: e.target.value } })}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1247,20 +1348,24 @@ export default function App() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1 max-h-28 overflow-y-auto">
-                    {profile.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1.5 text-[11px] bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 px-2.5 py-1 rounded-md"
-                      >
-                        {skill}
-                        <button
-                          onClick={() => handleRemoveSkill(skill)}
-                          className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                    {profile.skills.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">No skills added yet. Type a skill above and click +</p>
+                    ) : (
+                      profile.skills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="inline-flex items-center gap-1.5 text-[11px] bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 px-2.5 py-1 rounded-md"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                          {skill}
+                          <button
+                            onClick={() => handleRemoveSkill(skill)}
+                            className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -1284,20 +1389,24 @@ export default function App() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {(profile.certifications || []).map((cert) => (
-                      <span
-                        key={cert}
-                        className="inline-flex items-center gap-1.5 text-[11px] bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-2.5 py-1 rounded-md"
-                      >
-                        {cert}
-                        <button
-                          onClick={() => handleRemoveCert(cert)}
-                          className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                    {(!profile.certifications || profile.certifications.length === 0) ? (
+                      <p className="text-[11px] text-slate-500 italic">No certifications added yet. (Optional)</p>
+                    ) : (
+                      profile.certifications.map((cert) => (
+                        <span
+                          key={cert}
+                          className="inline-flex items-center gap-1.5 text-[11px] bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-2.5 py-1 rounded-md"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                          {cert}
+                          <button
+                            onClick={() => handleRemoveCert(cert)}
+                            className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -1332,20 +1441,26 @@ export default function App() {
                 </div>
 
                 <div className="space-y-2 max-h-36 overflow-y-auto pt-1">
-                  {Object.entries(profile.customAnswers || {}).map(([key, val]) => (
-                    <div key={key} className="p-2 rounded bg-slate-950 border border-slate-800/80 text-xs flex justify-between gap-2">
-                      <div className="overflow-hidden">
-                        <span className="font-semibold text-indigo-400 block truncate">{key.replace(/_/g, ' ')}</span>
-                        <p className="text-slate-300 text-[11px] line-clamp-2">{val}</p>
+                  {Object.keys(profile.customAnswers || {}).length === 0 ? (
+                    <p className="text-[11px] text-slate-500 italic text-center py-2">
+                      No custom answers yet. Add common application questions above!
+                    </p>
+                  ) : (
+                    Object.entries(profile.customAnswers || {}).map(([key, val]) => (
+                      <div key={key} className="p-2 rounded bg-slate-950 border border-slate-800/80 text-xs flex justify-between gap-2">
+                        <div className="overflow-hidden">
+                          <span className="font-semibold text-indigo-400 block truncate">{key.replace(/_/g, ' ')}</span>
+                          <p className="text-slate-300 text-[11px] line-clamp-2">{val}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveCustomField(key)}
+                          className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleRemoveCustomField(key)}
-                        className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1716,6 +1831,28 @@ export default function App() {
               </div>
             </div>
 
+            {/* New Customer Guide Card */}
+            <div
+              className={`p-3 rounded-xl border flex items-center justify-between ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
+              <div>
+                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>How It Works Guide</h4>
+                <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Quick 3-step walkthrough on how to autofill jobs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGuideModal(true)}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>View Guide</span>
+              </button>
+            </div>
+
             {/* WhatsApp Support Card */}
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
               <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wide">
@@ -1746,6 +1883,139 @@ export default function App() {
           <ShieldCheck className="w-3 h-3 text-emerald-400" /> Private & Local Storage
         </span>
       </footer>
+
+      {/* ================= HOW IT WORKS QUICK GUIDE MODAL ================= */}
+      {showGuideModal && (
+        <div
+          className={`absolute inset-0 z-50 backdrop-blur-md flex flex-col p-5 overflow-y-auto ${
+            isDark ? 'bg-[#090d16]/95 text-slate-100' : 'bg-white/98 text-slate-900 shadow-2xl'
+          }`}
+        >
+          {/* Modal Header */}
+          <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-sm">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>How AI Job Seeker Works</span>
+            </div>
+            <button
+              onClick={handleCloseGuide}
+              className={`p-1 rounded-lg transition cursor-pointer ${
+                isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title="Close guide"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="py-2.5 text-center">
+            <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Apply 10x Faster in 3 Steps
+            </h2>
+            <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Your personal autofill copilot for any job site.
+            </p>
+          </div>
+
+          {/* 3 Step Cards */}
+          <div className="space-y-2.5 my-2">
+            {/* Step 1 */}
+            <div
+              className={`p-3 rounded-xl border flex items-start gap-3 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className="w-7 h-7 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                1
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Save Your Profile</h4>
+                  <span
+                    className="text-[10px] text-cyan-400 font-semibold cursor-pointer hover:underline"
+                    onClick={handleGuideGoToProfile}
+                  >
+                    Go to Profile →
+                  </span>
+                </div>
+                <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Enter your name, email, phone, and skills in the Profile tab. Stored safely on your computer.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div
+              className={`p-3 rounded-xl border flex items-start gap-3 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className="w-7 h-7 rounded-full bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                2
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Open Any Job Posting</h4>
+                <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Browse job applications on LinkedIn, Indeed, Greenhouse, Workday, or any careers page.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div
+              className={`p-3 rounded-xl border flex items-start gap-3 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className="w-7 h-7 rounded-full bg-amber-600/20 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                3
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>1-Click Autofill</h4>
+                <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Click <strong className="text-indigo-400">⚡ Autofill Application</strong> or click the on-screen floating button to fill every field instantly!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Features Note */}
+          <div
+            className={`p-2.5 rounded-xl border space-y-1 ${
+              isDark ? 'bg-indigo-950/30 border-indigo-800/40' : 'bg-indigo-50 border-indigo-200'
+            }`}
+          >
+            <span className={`text-[11px] font-bold flex items-center gap-1.5 ${isDark ? 'text-indigo-300' : 'text-indigo-900'}`}>
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> AI Bonus Features:
+            </span>
+            <p className={`text-[10px] leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              • <strong>AI Question Helper:</strong> Instant answers for questions like <em>"Why do you want to work here?"</em><br/>
+              • <strong>ATS Cover Letters:</strong> 1-click tailored letters matched to the job description.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-auto pt-3 space-y-2">
+            <button
+              onClick={handleGuideGoToProfile}
+              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>Set Up My Profile Now (1 min) →</span>
+            </button>
+
+            <button
+              onClick={handleCloseGuide}
+              className={`w-full py-1.5 text-center text-xs font-medium cursor-pointer transition ${
+                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Got it, start applying
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ================= PRICING & UPGRADE MODAL ================= */}
       {showPricingModal && (

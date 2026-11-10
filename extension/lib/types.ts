@@ -73,31 +73,31 @@ export interface UserSubscription {
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
   personal: {
-    firstName: 'Mujib',
-    lastName: 'Ur Rahman',
-    email: 'mujiburrahman.dev@gmail.com',
-    phone: '+92 348 1974606',
-    cnic: '17301-1234567-1',
-    address: 'LynkZone Tech Center',
-    city: 'Peshawar',
-    state: 'KP',
-    zipCode: '25000',
-    country: 'Pakistan',
-    linkedIn: 'https://linkedin.com/in/mujiburrahman',
-    github: 'https://github.com/mujiburrahman',
-    portfolio: 'https://lynkzone.dev',
-    twitter: 'https://x.com/mujiburrahman',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    cnic: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: '',
+    linkedIn: '',
+    github: '',
+    portfolio: '',
+    twitter: '',
   },
   work: {
-    currentTitle: 'Lead Software Engineer',
-    currentCompany: 'LynkZone',
-    yearsExperience: '5',
+    currentTitle: '',
+    currentCompany: '',
+    yearsExperience: '',
     noticePeriod: 'Immediate',
-    salaryExpectations: 'Negotiable',
+    salaryExpectations: '',
     workLocationPreference: 'Remote',
     willingToRelocate: 'Negotiable',
     desiredEmploymentType: 'Full-time',
-    summary: 'Senior software engineer and founder of LynkZone specializing in full-stack web and mobile development, AI integration, and high-performance software.',
+    summary: '',
   },
   authorization: {
     isAuthorizedUS: true,
@@ -107,11 +107,11 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     citizenshipStatus: 'Citizen',
   },
   education: {
-    school: 'University of California, Berkeley',
-    degree: "Bachelor of Science",
-    fieldOfStudy: 'Computer Science',
-    graduationYear: '2020',
-    gpa: '3.8',
+    school: '',
+    degree: '',
+    fieldOfStudy: '',
+    graduationYear: '',
+    gpa: '',
   },
   eeo: {
     gender: 'Decline to self-identify',
@@ -119,17 +119,7 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     veteranStatus: 'I am not a protected veteran',
     disabilityStatus: 'No, I do not have a disability',
   },
-  skills: [
-    'React', 'TypeScript', 'Node.js', 'Next.js', 'Tailwind CSS',
-    'Python', 'PostgreSQL', 'Docker', 'AWS', 'RESTful APIs', 'GraphQL'
-  ],
-  certifications: [
-    'AWS Certified Solutions Architect',
-    'Professional Scrum Master (PSM I)'
-  ],
-  customAnswers: {
-    why_us: "I have closely followed your company's rapid growth and admired your commitment to user-centric engineering excellence. My background in building responsive web applications and high-availability systems directly aligns with the technical goals of this team.",
-    strengths: "My greatest strength is my ability to rapidly bridge product vision with clean, reliable architecture, translating ambiguous user requirements into high-performance software while fostering collaboration across engineering and product teams.",
-    conflict: "In my previous role, our team had conflicting opinions regarding whether to adopt a microservices vs. modular monolith architecture. I organized an empirical benchmarking spike with defined latency and maintainability metrics, presenting objective data that helped our team reach a unified, confident consensus."
-  },
+  skills: [],
+  certifications: [],
+  customAnswers: {},
 };
