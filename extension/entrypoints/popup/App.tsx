@@ -13,22 +13,57 @@ import {
   Zap,
   ShieldCheck,
   ExternalLink,
-  ChevronRight,
   Plus,
-  AlertCircle,
   Crown,
   Check,
   X,
   Edit3,
   Sun,
-  Moon
+  Moon,
+  Globe,
+  GraduationCap,
+  MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription } from '../../lib/types';
-import { getUserProfile, saveUserProfile, getJobApplications, saveJobApplication, updateApplicationStatus, deleteJobApplication, getUserSubscription, incrementUsage, setProStatus, resetDailyUsage, getAppTheme, setAppTheme, getFloatingWidgetEnabled, setFloatingWidgetEnabled } from '../../lib/storage';
+import {
+  getUserProfile,
+  saveUserProfile,
+  getJobApplications,
+  saveJobApplication,
+  updateApplicationStatus,
+  deleteJobApplication,
+  getUserSubscription,
+  incrementUsage,
+  setProStatus,
+  getAppTheme,
+  setAppTheme,
+  getFloatingWidgetEnabled,
+  setFloatingWidgetEnabled,
+} from '../../lib/storage';
 import { generateAIAnswer, generateAICoverLetter } from '../../lib/ai';
 import { API_BASE_URL } from '../../lib/config';
 
 type Tab = 'autofill' | 'profile' | 'cover-letter' | 'tracker' | 'settings';
+
+const QUICK_PROMPTS = [
+  'Why should we hire you?',
+  'Tell me about yourself',
+  'What are your greatest strengths?',
+  'How do you handle tight deadlines?',
+  'Describe a challenge you solved',
+  'Where do you see yourself in 3-5 years?',
+];
+
+const PROFILE_CATEGORIES = [
+  { id: 'contact', label: 'Contact', icon: User },
+  { id: 'links', label: 'Links', icon: Globe },
+  { id: 'work', label: 'Work', icon: Briefcase },
+  { id: 'education', label: 'Education', icon: GraduationCap },
+  { id: 'eeo', label: 'Demographics', icon: ShieldCheck },
+  { id: 'skills', label: 'Skills', icon: Zap },
+  { id: 'custom', label: 'Custom Q&A', icon: MessageSquare },
+] as const;
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -102,14 +137,14 @@ export default function App() {
       document.body.classList.remove('theme-light');
     }
     await setAppTheme(next);
-    showToast(next === 'light' ? '☀️ Light theme activated' : '🌙 Dark theme activated');
+    showToast(next === 'light' ? 'Light mode enabled' : 'Dark mode enabled');
   };
 
   const handleToggleFloatingWidget = async () => {
     const nextVal = !showFloatingWidget;
     setShowFloatingWidget(nextVal);
     await setFloatingWidgetEnabled(nextVal);
-    showToast(nextVal ? '⚡ On-screen floating button enabled' : '🚫 On-screen floating button disabled');
+    showToast(nextVal ? 'Floating button enabled' : 'Floating button hidden');
   };
 
   const showToast = (msg: string) => {
@@ -129,8 +164,8 @@ export default function App() {
           } catch {}
 
           setPageInfo({
-            title: tab.title || 'Job Posting',
-            company: host || 'Active Site',
+            title: tab.title || '',
+            company: host || '',
             url: url,
             description: '',
           });
@@ -172,7 +207,7 @@ export default function App() {
     const freeLimit = subscription.monthlyLimit || 50;
     const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
     if (!subscription.isPro && currentUsage >= freeLimit) {
-      showToast(`Monthly free limit reached (${freeLimit}/${freeLimit}). Upgrade to Pro for unlimited autofills!`);
+      showToast(`Monthly limit reached (${freeLimit}/${freeLimit}). Upgrade to Pro for unlimited autofills!`);
       return;
     }
 
@@ -196,10 +231,10 @@ export default function App() {
                     setLoading(false);
                     const filled = results?.[0]?.result ?? 0;
                     if (filled > 0) {
-                      showToast(`✨ Success! Filled ${filled} fields.`);
+                      showToast(`Autofilled ${filled} fields!`);
                       await recordApplicationAndUsage();
                     } else {
-                      showToast('No matching empty form fields found on this page.');
+                      showToast('No empty application fields found on this page.');
                     }
                   }
                 );
@@ -211,10 +246,10 @@ export default function App() {
               setLoading(false);
               const filled = response.filledCount ?? 0;
               if (filled > 0) {
-                showToast(`✨ Success! ${filled} fields autofilled.`);
+                showToast(`Autofilled ${filled} fields!`);
                 await recordApplicationAndUsage();
               } else {
-                showToast('ℹ️ No empty application fields found on this page.');
+                showToast('No empty application fields found on this page.');
               }
             }
           });
@@ -229,14 +264,14 @@ export default function App() {
   // Handle AI Custom Answer
   const handleGenerateAnswer = async () => {
     if (!customQuestion.trim()) {
-      showToast('Please type a question or pick a quick prompt.');
+      showToast('Please type a question or pick a prompt.');
       return;
     }
 
     const freeLimit = subscription.monthlyLimit || 50;
     const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
     if (!subscription.isPro && currentUsage >= freeLimit) {
-      showToast('Monthly free limit reached. Upgrade to Pro for unlimited AI answers!');
+      showToast('Monthly limit reached. Upgrade to Pro for unlimited AI answers!');
       return;
     }
 
@@ -266,7 +301,7 @@ export default function App() {
     const freeLimit = subscription.monthlyLimit || 50;
     const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
     if (!subscription.isPro && currentUsage >= freeLimit) {
-      showToast('Monthly free limit reached. Upgrade to Pro for unlimited cover letters!');
+      showToast('Monthly limit reached. Upgrade to Pro for unlimited cover letters!');
       return;
     }
 
@@ -281,7 +316,7 @@ export default function App() {
       setCoverLetter(letter);
       const newSub = await incrementUsage();
       setSubscription(newSub);
-      showToast('ATS Cover Letter generated!');
+      showToast('Cover letter generated!');
     } catch {
       showToast('Failed to generate cover letter.');
     } finally {
@@ -289,7 +324,7 @@ export default function App() {
     }
   };
 
-  const handleCopy = (text: string, label = 'Copied!') => {
+  const handleCopy = (text: string, label = 'Copied to clipboard!') => {
     navigator.clipboard.writeText(text);
     showToast(label);
   };
@@ -320,7 +355,7 @@ export default function App() {
   };
 
   const handleRemoveSkill = (skillToRemove: string) => {
-    const updated = { ...profile, skills: profile.skills.filter(s => s !== skillToRemove) };
+    const updated = { ...profile, skills: profile.skills.filter((s) => s !== skillToRemove) };
     setProfile(updated);
     saveUserProfile(updated);
   };
@@ -335,7 +370,7 @@ export default function App() {
   };
 
   const handleRemoveCert = (certToRemove: string) => {
-    const updated = { ...profile, certifications: (profile.certifications || []).filter(c => c !== certToRemove) };
+    const updated = { ...profile, certifications: (profile.certifications || []).filter((c) => c !== certToRemove) };
     setProfile(updated);
     saveUserProfile(updated);
   };
@@ -366,7 +401,6 @@ export default function App() {
     saveUserProfile(updated);
   };
 
-  // Launch Real Stripe Checkout or Verified LynkZone WhatsApp Order
   const handleStartCheckout = async (plan: 'monthly' | 'lifetime' = pricingTier) => {
     setLoading(true);
     try {
@@ -385,17 +419,17 @@ export default function App() {
         } else {
           window.open(data.checkoutUrl, '_blank');
         }
-        showToast('Opening secure Stripe checkout in new tab...');
+        showToast('Opening secure checkout...');
         setShowPricingModal(false);
       } else if (data.whatsappUrl) {
-        showToast('Direct payment order. Opening LynkZone WhatsApp...');
+        showToast('Opening LynkZone WhatsApp...');
         if (typeof chrome !== 'undefined' && chrome.tabs) {
           chrome.tabs.create({ url: data.whatsappUrl });
         } else {
           window.open(data.whatsappUrl, '_blank');
         }
       } else {
-        showToast(data.message || 'Error creating checkout session.');
+        showToast(data.message || 'Error creating checkout.');
       }
     } catch {
       showToast('Payment server offline. Ensure backend is running.');
@@ -404,11 +438,10 @@ export default function App() {
     }
   };
 
-  // Verify Real Paid License Key or Account Email (No Dummy Data Accepted)
   const handleVerifyLicense = async (keyToVerify?: string) => {
     const key = (keyToVerify || licenseInput).trim();
     if (!key) {
-      showToast('Please enter your official license key or email.');
+      showToast('Please enter your license key or email.');
       return;
     }
     setActivatingLicense(true);
@@ -425,31 +458,35 @@ export default function App() {
       if (res.ok && data.isPro) {
         await setProStatus(true);
         setSubscription({ ...subscription, isPro: true });
-        showToast(`🎉 Verified! Pro ${data.plan === 'lifetime' ? 'Lifetime' : 'Monthly'} active.`);
+        showToast(`Pro activated successfully!`);
         setShowPricingModal(false);
         setLicenseInput('');
       } else {
-        showToast(data.error || 'Invalid license key. Dummy data is rejected.');
+        showToast(data.error || 'Invalid license key.');
       }
     } catch {
-      showToast('Could not reach license verification server.');
+      showToast('Could not reach verification server.');
     } finally {
       setActivatingLicense(false);
     }
   };
 
+  const freeLimit = subscription.monthlyLimit || 50;
+  const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
+  const remainingQuota = Math.max(0, freeLimit - currentUsage);
+
   return (
     <div className={`flex flex-col h-[600px] w-[480px] select-none ${theme === 'light' ? 'theme-light' : 'bg-[#0b0f19] text-slate-100'}`}>
       {/* Toast Feedback Notification */}
       {feedback && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg shadow-indigo-500/20 flex items-center gap-2 animate-bounce">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg shadow-indigo-500/25 flex items-center gap-2 animate-bounce font-medium">
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>{feedback}</span>
         </div>
       )}
 
-      {/* Header (Matching Photo-Tools brand styling) */}
-      <header className="px-5 py-3.5 border-b border-slate-800/80 bg-[#0f172a]/90 backdrop-blur-md flex items-center justify-between">
+      {/* Sleek, Friendly Header */}
+      <header className="px-4 py-3 border-b border-slate-800/80 bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-md shadow-indigo-500/20">
             <div className="w-full h-full bg-[#0b0f19] rounded-[7px] flex items-center justify-center">
@@ -459,29 +496,30 @@ export default function App() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-sm tracking-tight text-white">AI Job Seeker</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-cyan-400 font-bold border border-cyan-500/30 tracking-wide">
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-cyan-300 font-semibold border border-cyan-500/30">
                 LynkZone
               </span>
             </div>
-            <p className="text-[10px] text-slate-400">by LynkZone • 1-Click Autofill & AI Copilot</p>
+            <p className="text-[11px] text-slate-400">Fast Autofill & AI Copilot</p>
           </div>
         </div>
 
-        {/* Header Right Actions (Plan Badge & Light/Dark Theme Switcher) */}
-        <div className="flex items-center gap-1.5">
-          {/* Sun / Moon Theme Toggle */}
+        {/* Header Right Actions */}
+        <div className="flex items-center gap-2">
+          {/* Theme Switcher */}
           <button
             onClick={handleToggleTheme}
             className={`p-1.5 rounded-full border transition cursor-pointer flex items-center justify-center ${
               theme === 'dark'
-                ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 shadow-sm'
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-amber-300 border-slate-700 shadow-sm'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
             }`}
-            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Quota / Pro Pill */}
           {subscription.isPro ? (
             <button
               onClick={() => setShowPricingModal(true)}
@@ -491,29 +529,27 @@ export default function App() {
                   : 'font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 border-emerald-300 shadow-sm'
               }`}
             >
-              <Crown className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`} /> Pro Active
+              <Crown className="w-3.5 h-3.5 text-emerald-400" /> Pro Active
             </button>
           ) : (
             <button
               onClick={() => setShowPricingModal(true)}
               className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer shadow-sm ${
                 isDark
-                  ? 'font-semibold text-amber-300 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border-amber-500/30 shadow-amber-500/10'
+                  ? 'font-semibold text-amber-300 bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border-amber-500/30'
                   : 'font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border-amber-400'
               }`}
               title="Click to upgrade"
             >
               <Zap className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-800 fill-amber-700'}`} />
-              <span>
-                {Math.max(0, (subscription.monthlyLimit || 50) - (subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0))} left of {subscription.monthlyLimit || 50} free
-              </span>
+              <span>{remainingQuota} left</span>
             </button>
           )}
         </div>
       </header>
 
       {/* Segmented Tab Bar */}
-      <nav className="flex items-center justify-around px-3 py-2 bg-[#0c1322] border-b border-slate-800/80 text-xs">
+      <nav className="flex items-center justify-around px-2 py-1.5 bg-[#0c1322] border-b border-slate-800/80 text-xs">
         <button
           onClick={() => setActiveTab('autofill')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
@@ -555,7 +591,12 @@ export default function App() {
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Clock className="w-3.5 h-3.5" /> Tracker ({applications.length})
+          <Clock className="w-3.5 h-3.5" /> Tracker
+          {applications.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-indigo-300 font-bold">
+              {applications.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -572,86 +613,72 @@ export default function App() {
       </nav>
 
       {/* Main Tab Content */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4">
+      <main className="flex-1 overflow-y-auto p-4 space-y-3.5">
         {/* ================= TAB 1: AUTOFILL & COPILOT ================= */}
         {activeTab === 'autofill' && (
-          <div className="space-y-4">
-            {/* Active Page Card */}
-            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start justify-between">
-              <div>
-                <span className="text-[10px] font-semibold tracking-wider uppercase text-cyan-400">Current Job Page</span>
-                <h3 className="text-sm font-semibold text-white truncate max-w-[340px]">
-                  {pageInfo.title || 'Detecting job listing...'}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">{pageInfo.company || 'LinkedIn, Indeed, or Greenhouse'}</p>
+          <div className="space-y-3.5">
+            {/* Active Job Detection / Friendly Status Card */}
+            {pageInfo.title ? (
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wide">
+                      Job Page Ready
+                    </span>
+                  </div>
+                  <h3 className="text-xs font-semibold text-white truncate">{pageInfo.title}</h3>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">{pageInfo.company || 'Job Application'}</p>
+                </div>
+                <button
+                  onClick={detectActiveTabInfo}
+                  className="p-1 rounded text-slate-400 hover:text-cyan-400 transition"
+                  title="Refresh detection"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
               </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-white">Ready to Apply</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Open any job posting on LinkedIn, Indeed, etc., then click below.
+                  </p>
+                </div>
+                <button
+                  onClick={detectActiveTabInfo}
+                  className="p-1 rounded text-slate-400 hover:text-cyan-400 transition"
+                  title="Detect page"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Primary Autofill Action Button */}
+            <div className="space-y-1.5">
               <button
-                onClick={detectActiveTabInfo}
-                className="text-[11px] text-slate-400 hover:text-cyan-400 flex items-center gap-1"
-                title="Refresh page info"
+                onClick={handleTriggerAutofill}
+                disabled={loading}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
-                Refresh
+                <Zap className="w-4 h-4 fill-white" />
+                {loading ? 'Autofilling Form...' : 'Autofill Application'}
               </button>
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <span>Fills fields safely using your saved profile</span>
+              </div>
             </div>
 
-            {/* Free Tier Monthly Usage Indicator (Shows how many left out of monthly limit) */}
-            {!subscription.isPro && (() => {
-              const freeLimit = subscription.monthlyLimit || 50;
-              const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
-              const remaining = Math.max(0, freeLimit - currentUsage);
-              const isMaxed = currentUsage >= freeLimit;
-              const percent = Math.min(100, (currentUsage / freeLimit) * 100);
-
-              return (
-                <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Monthly Free Applications</span>
-                    </span>
-                    <span className="font-bold text-amber-300 text-[11px]">
-                      {remaining} left out of {freeLimit} this month
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-                    <div
-                      className={`h-full transition-all duration-300 rounded-full ${
-                        isMaxed ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
-                      }`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500">
-                    <span>{currentUsage} of {freeLimit} used this month</span>
-                    <button
-                      onClick={() => setShowPricingModal(true)}
-                      className="text-cyan-400 hover:underline cursor-pointer font-medium"
-                    >
-                      Get Unlimited →
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Primary Autofill Action */}
-            <button
-              onClick={handleTriggerAutofill}
-              disabled={loading}
-              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
-            >
-              <Zap className="w-4 h-4 fill-white" />
-              {loading ? 'Autofilling Form...' : '1-Click Autofill Active Form'}
-            </button>
-
             {/* AI Custom Question Responder */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-cyan-400" />
-                  <h4 className="text-xs font-semibold text-white">AI Custom Question Copilot</h4>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <h4 className="text-xs font-semibold text-white">AI Question Helper</h4>
                 </div>
-                {/* Tone Selector */}
                 <select
                   value={selectedTone}
                   onChange={(e) => setSelectedTone(e.target.value as any)}
@@ -663,41 +690,27 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Quick Prompt Chips (All Top ATS Questions) */}
-              <div>
-                <span className="text-[10px] text-slate-400 block mb-1.5">Common Application Questions:</span>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                  {[
-                    'Why do you want to work here?',
-                    'Tell me about yourself & background',
-                    'Greatest technical strengths?',
-                    'Describe a project conflict & solution',
-                    'Biggest professional achievement?',
-                    'Why are you leaving current role?',
-                    'Handling tight deadlines & pressure',
-                    'Where do you see yourself in 3-5 years?',
-                    'Leadership & mentoring experience',
-                    'Expected salary & compensation'
-                  ].map((chip) => (
-                    <button
-                      key={chip}
-                      onClick={() => setCustomQuestion(chip)}
-                      className={`text-[10px] px-2.5 py-1 rounded-md transition cursor-pointer border ${
-                        customQuestion === chip
-                          ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700/60'
-                      }`}
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
+              {/* Quick Prompts Row */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {QUICK_PROMPTS.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => setCustomQuestion(chip)}
+                    className={`text-[10px] px-2.5 py-1 rounded-md whitespace-nowrap transition cursor-pointer border ${
+                      customQuestion === chip
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700/60'
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
               </div>
 
               <textarea
                 value={customQuestion}
                 onChange={(e) => setCustomQuestion(e.target.value)}
-                placeholder="Paste or click any application question above..."
+                placeholder="Paste any application question here..."
                 rows={2}
                 className="w-full text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
               />
@@ -705,19 +718,19 @@ export default function App() {
               <button
                 onClick={handleGenerateAnswer}
                 disabled={loading || !customQuestion.trim()}
-                className="w-full py-2.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-md shadow-indigo-600/20"
+                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-md shadow-indigo-600/20"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                {loading ? 'Crafting tailored answer...' : 'Generate AI Answer'}
+                {loading ? 'Crafting answer...' : 'Generate Answer'}
               </button>
 
-              {/* Generated Result Output with Live Edit Option */}
+              {/* Generated Result Output */}
               {generatedAnswer && (
-                <div className="mt-3 p-3.5 rounded-xl bg-slate-950 border border-indigo-500/40 space-y-2 shadow-lg shadow-indigo-950/20">
+                <div className="mt-2.5 p-3 rounded-xl bg-slate-950 border border-indigo-500/40 space-y-2">
                   <div className="flex items-center justify-between text-[11px]">
                     <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
                       <Edit3 className="w-3.5 h-3.5" />
-                      <span>Editable AI Answer:</span>
+                      <span>Tailored Answer</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-slate-500 font-mono">
@@ -732,19 +745,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Fully Editable Textarea */}
                   <textarea
                     value={generatedAnswer}
                     onChange={(e) => setGeneratedAnswer(e.target.value)}
-                    rows={5}
-                    placeholder="Click to edit or refine your answer..."
-                    className="w-full text-xs p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 leading-relaxed font-sans focus:outline-none focus:border-indigo-500 resize-y"
+                    rows={4}
+                    className="w-full text-xs p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
                   />
 
-                  <div className="flex items-center justify-between pt-1 text-[10px]">
-                    <span className="text-slate-500 flex items-center gap-1">
-                      ✏️ Edit anytime before pasting
-                    </span>
+                  <div className="flex items-center justify-end pt-0.5">
                     <button
                       onClick={() => {
                         const cleanKey = customQuestion.slice(0, 30).toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -757,9 +765,9 @@ export default function App() {
                         };
                         setProfile(updated);
                         saveUserProfile(updated);
-                        showToast('Answer saved to your Profile Q&A!');
+                        showToast('Saved to Profile Q&A!');
                       }}
-                      className="text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer font-medium"
+                      className="text-[11px] text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer font-medium"
                     >
                       + Save to Profile Q&A
                     </button>
@@ -775,40 +783,36 @@ export default function App() {
           <div className="space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white">Your Autofill Profile</h3>
-                <p className="text-xs text-slate-400">Manage all application details in one place.</p>
+                <h3 className="text-sm font-semibold text-white">Your Profile</h3>
+                <p className="text-xs text-slate-400">Used to autofill your job applications.</p>
               </div>
               <button
                 onClick={handleSaveProfile}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow cursor-pointer transition"
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow cursor-pointer transition flex items-center gap-1"
               >
-                Save Profile
+                <Check className="w-3.5 h-3.5" /> Save Profile
               </button>
             </div>
 
-            {/* Category Sub-Navigation Pills */}
+            {/* Category Navigation Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
-              {[
-                { id: 'contact', label: '👤 Contact' },
-                { id: 'links', label: '🔗 Links' },
-                { id: 'work', label: '💼 Work & Prefs' },
-                { id: 'education', label: '🎓 Education' },
-                { id: 'eeo', label: '📋 Demographics' },
-                { id: 'skills', label: '⚡ Skills & Certs' },
-                { id: 'custom', label: '💬 Custom Q&A' },
-              ].map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setProfileCategory(cat.id as any)}
-                  className={`px-2.5 py-1 rounded-full whitespace-nowrap font-medium transition cursor-pointer ${
-                    profileCategory === cat.id
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
+              {PROFILE_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setProfileCategory(cat.id as any)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full whitespace-nowrap font-medium transition cursor-pointer ${
+                      profileCategory === cat.id
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    <Icon className="w-3 h-3" />
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* CATEGORY 1: CONTACT */}
@@ -858,11 +862,11 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400">National ID / CNIC / NICOP / PoR (User ID)</label>
+                  <label className="text-[10px] text-slate-400">National ID / CNIC (User ID)</label>
                   <input
                     type="text"
                     value={profile.personal.cnic || ''}
-                    placeholder="e.g. 17301-1234567-1 or 8265478965785"
+                    placeholder="e.g. 17301-1234567-1"
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, cnic: e.target.value } })}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -923,9 +927,9 @@ export default function App() {
             {/* CATEGORY 2: LINKS */}
             {profileCategory === 'links' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Social & Professional Profiles</span>
+                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Online Profiles</span>
                 <div>
-                  <label className="text-[10px] text-slate-400">LinkedIn Profile URL</label>
+                  <label className="text-[10px] text-slate-400">LinkedIn URL</label>
                   <input
                     type="url"
                     value={profile.personal.linkedIn}
@@ -945,17 +949,17 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400">Portfolio / Personal Website</label>
+                  <label className="text-[10px] text-slate-400">Portfolio / Website</label>
                   <input
                     type="url"
                     value={profile.personal.portfolio}
                     onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, portfolio: e.target.value } })}
-                    placeholder="https://yourdomain.dev"
+                    placeholder="https://yourportfolio.com"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400">Twitter / X Handle or URL</label>
+                  <label className="text-[10px] text-slate-400">Twitter / X URL</label>
                   <input
                     type="text"
                     value={profile.personal.twitter || ''}
@@ -970,7 +974,7 @@ export default function App() {
             {/* CATEGORY 3: WORK & PREFERENCES */}
             {profileCategory === 'work' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Employment & Job Preferences</span>
+                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Work & Experience</span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-400">Current Job Title</label>
@@ -1065,9 +1069,9 @@ export default function App() {
             {/* CATEGORY 4: EDUCATION & LEGAL */}
             {profileCategory === 'education' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Education & Work Authorization</span>
+                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Education & Authorization</span>
                 <div>
-                  <label className="text-[10px] text-slate-400">University / Institution</label>
+                  <label className="text-[10px] text-slate-400">University / College</label>
                   <input
                     type="text"
                     value={profile.education.school}
@@ -1122,13 +1126,15 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
                   <div>
-                    <label className="text-[10px] text-slate-400">Legally Authorized to Work?</label>
+                    <label className="text-[10px] text-slate-400">Authorized to Work?</label>
                     <select
                       value={profile.authorization.legallyAuthorized ? 'yes' : 'no'}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        authorization: { ...profile.authorization, legallyAuthorized: e.target.value === 'yes' }
-                      })}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          authorization: { ...profile.authorization, legallyAuthorized: e.target.value === 'yes' },
+                        })
+                      }
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="yes">Yes</option>
@@ -1136,13 +1142,15 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400">Require Visa Sponsorship?</label>
+                    <label className="text-[10px] text-slate-400">Require Sponsorship?</label>
                     <select
                       value={profile.authorization.sponsorshipRequired ? 'yes' : 'no'}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        authorization: { ...profile.authorization, sponsorshipRequired: e.target.value === 'yes' }
-                      })}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          authorization: { ...profile.authorization, sponsorshipRequired: e.target.value === 'yes' },
+                        })
+                      }
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="no">No</option>
@@ -1156,10 +1164,7 @@ export default function App() {
             {/* CATEGORY 5: EEO / DEMOGRAPHICS */}
             {profileCategory === 'eeo' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">EEO Voluntary Demographics</span>
-                  <span className="text-[9px] text-slate-500">Auto-answers standard ATS questions</span>
-                </div>
+                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Demographics (EEO)</span>
 
                 <div>
                   <label className="text-[10px] text-slate-400">Gender Identity</label>
@@ -1224,7 +1229,7 @@ export default function App() {
               <div className="space-y-3">
                 {/* Skills */}
                 <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Top Skills</span>
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Skills</span>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -1245,10 +1250,15 @@ export default function App() {
                     {profile.skills.map((skill) => (
                       <span
                         key={skill}
-                        className="inline-flex items-center gap-1 text-[11px] bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 px-2 py-0.5 rounded-md"
+                        className="inline-flex items-center gap-1.5 text-[11px] bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 px-2.5 py-1 rounded-md"
                       >
                         {skill}
-                        <button onClick={() => handleRemoveSkill(skill)} className="hover:text-red-400 cursor-pointer">×</button>
+                        <button
+                          onClick={() => handleRemoveSkill(skill)}
+                          className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -1256,7 +1266,7 @@ export default function App() {
 
                 {/* Certifications */}
                 <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Certifications & Licenses</span>
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Certifications</span>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -1277,10 +1287,15 @@ export default function App() {
                     {(profile.certifications || []).map((cert) => (
                       <span
                         key={cert}
-                        className="inline-flex items-center gap-1 text-[11px] bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded-md"
+                        className="inline-flex items-center gap-1.5 text-[11px] bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-2.5 py-1 rounded-md"
                       >
                         {cert}
-                        <button onClick={() => handleRemoveCert(cert)} className="hover:text-red-400 cursor-pointer">×</button>
+                        <button
+                          onClick={() => handleRemoveCert(cert)}
+                          className="hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -1291,17 +1306,14 @@ export default function App() {
             {/* CATEGORY 7: CUSTOM Q&A */}
             {profileCategory === 'custom' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Custom Questions & Answers</span>
-                  <span className="text-[9px] text-slate-500">Auto-matches unusual form fields</span>
-                </div>
+                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Custom Questions & Answers</span>
 
                 <div className="space-y-2 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
                   <input
                     type="text"
                     value={customKeyInput}
                     onChange={(e) => setCustomKeyInput(e.target.value)}
-                    placeholder="Field keyword (e.g. 'referral', 'why us', 'rate')..."
+                    placeholder="Question keyword (e.g. referral, why us)..."
                     className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200"
                   />
                   <textarea
@@ -1315,7 +1327,7 @@ export default function App() {
                     onClick={handleAddCustomField}
                     className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Custom Field
+                    <Plus className="w-3.5 h-3.5" /> Add Custom Answer
                   </button>
                 </div>
 
@@ -1342,16 +1354,18 @@ export default function App() {
 
         {/* ================= TAB 3: COVER LETTER ================= */}
         {activeTab === 'cover-letter' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white">AI Cover Letter Generator</h3>
-                <p className="text-xs text-slate-400">Customized specifically to {pageInfo.company || 'the job listing'}.</p>
+                <h3 className="text-sm font-semibold text-white">Cover Letter</h3>
+                <p className="text-xs text-slate-400">
+                  {pageInfo.company ? `Tailored for ${pageInfo.company}` : 'Tailored to the active job listing'}
+                </p>
               </div>
               <button
                 onClick={handleGenerateCoverLetter}
                 disabled={loading}
-                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 {loading ? 'Writing...' : 'Generate Letter'}
@@ -1359,15 +1373,11 @@ export default function App() {
             </div>
 
             {coverLetter ? (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <div className="flex items-center gap-1.5 text-indigo-400 font-semibold text-[11px]">
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Editable Cover Letter Draft</span>
-                    <span className="text-[10px] text-slate-500 font-normal font-mono">
-                      ({coverLetter.split(/\s+/).filter(Boolean).length} words)
-                    </span>
-                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {coverLetter.split(/\s+/).filter(Boolean).length} words
+                  </span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleCopy(coverLetter, 'Cover letter copied!')}
@@ -1384,18 +1394,12 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <textarea
-                    value={coverLetter}
-                    onChange={(e) => setCoverLetter(e.target.value)}
-                    rows={13}
-                    placeholder="Click to edit or personalize any paragraph..."
-                    className="w-full text-xs p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 leading-relaxed font-sans focus:outline-none focus:border-indigo-500 resize-none"
-                  />
-                  <div className="text-[10px] text-slate-500 text-right mt-1">
-                    ✏️ Feel free to edit or personalize text directly before copying
-                  </div>
-                </div>
+                <textarea
+                  value={coverLetter}
+                  onChange={(e) => setCoverLetter(e.target.value)}
+                  rows={13}
+                  className="w-full text-xs p-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 leading-relaxed focus:outline-none focus:border-indigo-500 resize-none font-sans"
+                />
               </div>
             ) : (
               <div className="p-8 text-center rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-3">
@@ -1403,8 +1407,8 @@ export default function App() {
                   <FileText className="w-6 h-6" />
                 </div>
                 <h4 className="text-sm font-semibold text-white">No cover letter generated yet</h4>
-                <p className="text-xs text-slate-400 max-w-[320px] mx-auto">
-                  Click the button above to generate a professional, ATS-friendly cover letter tailored to this exact job opening.
+                <p className="text-xs text-slate-400 max-w-[300px] mx-auto">
+                  Click Generate above to write a tailored cover letter matched to this job posting.
                 </p>
               </div>
             )}
@@ -1413,7 +1417,7 @@ export default function App() {
 
         {/* ================= TAB 4: APPLIED TRACKER ================= */}
         {activeTab === 'tracker' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-white">Application Tracker</h3>
@@ -1425,7 +1429,7 @@ export default function App() {
                     const csvContent =
                       'data:text/csv;charset=utf-8,' +
                       'Company,Job Title,Applied Date,Status,URL\n' +
-                      applications.map(a => `"${a.company}","${a.jobTitle}","${a.appliedDate}","${a.status}","${a.url}"`).join('\n');
+                      applications.map((a) => `"${a.company}","${a.jobTitle}","${a.appliedDate}","${a.status}","${a.url}"`).join('\n');
                     const encodedUri = encodeURI(csvContent);
                     const link = document.createElement('a');
                     link.setAttribute('href', encodedUri);
@@ -1435,7 +1439,7 @@ export default function App() {
                     document.body.removeChild(link);
                     showToast('Exported to CSV!');
                   }}
-                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center gap-1"
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center gap-1 cursor-pointer"
                 >
                   <Download className="w-3 h-3" /> Export CSV
                 </button>
@@ -1444,8 +1448,11 @@ export default function App() {
 
             {applications.length === 0 ? (
               <div className="p-8 text-center rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2">
-                <Clock className="w-8 h-8 text-slate-500 mx-auto" />
-                <p className="text-xs text-slate-400">No applications tracked yet. Autofill a job to log it automatically!</p>
+                <Clock className="w-8 h-8 text-slate-500 mx-auto opacity-60" />
+                <h4 className="text-sm font-semibold text-white">No applications yet</h4>
+                <p className="text-xs text-slate-400 max-w-[280px] mx-auto">
+                  When you autofill a job, it will automatically be saved and tracked here.
+                </p>
               </div>
             ) : (
               <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
@@ -1455,7 +1462,7 @@ export default function App() {
                     className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <h4 className="text-xs font-semibold text-white truncate">{app.jobTitle}</h4>
                         {app.url && (
                           <a href={app.url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-cyan-400">
@@ -1471,7 +1478,7 @@ export default function App() {
                         value={app.status}
                         onChange={(e) => {
                           updateApplicationStatus(app.id, e.target.value as any);
-                          setApplications(applications.map(a => a.id === app.id ? { ...a, status: e.target.value as any } : a));
+                          setApplications(applications.map((a) => (a.id === app.id ? { ...a, status: e.target.value as any } : a)));
                         }}
                         className={`text-[10px] font-medium px-2 py-1 rounded-full border focus:outline-none cursor-pointer ${
                           app.status === 'Applied'
@@ -1493,10 +1500,11 @@ export default function App() {
                       <button
                         onClick={async () => {
                           await deleteJobApplication(app.id);
-                          setApplications(applications.filter(a => a.id !== app.id));
+                          setApplications(applications.filter((a) => a.id !== app.id));
                           showToast('Application deleted');
                         }}
-                        className="text-slate-500 hover:text-red-400 p-1"
+                        className="text-slate-500 hover:text-red-400 p-1 cursor-pointer"
+                        title="Delete"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1508,58 +1516,68 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= TAB 5: SETTINGS & MONETIZATION ================= */}
+        {/* ================= TAB 5: SETTINGS ================= */}
         {activeTab === 'settings' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div>
-              <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Extension Settings & Account</h3>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Manage plan, backups, and preferences.</p>
+              <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Settings</h3>
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Manage preferences and subscription.</p>
             </div>
 
-            {/* Subscription & Pricing Box */}
-            <div className={`p-4 rounded-xl border space-y-3 ${
-              isDark
-                ? 'bg-gradient-to-br from-indigo-950/60 to-slate-900 border-indigo-500/30'
-                : 'bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border-indigo-200 shadow-sm'
-            }`}>
+            {/* Current Plan Card */}
+            <div
+              className={`p-3.5 rounded-xl border space-y-2.5 ${
+                isDark
+                  ? 'bg-gradient-to-br from-indigo-950/60 to-slate-900 border-indigo-500/30'
+                  : 'bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border-indigo-200 shadow-sm'
+              }`}
+            >
               <div className="flex items-center justify-between">
                 <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Current Plan</span>
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                  subscription.isPro
-                    ? (isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300')
-                    : (isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-amber-100 text-amber-900 border border-amber-300')
-                }`}>
+                <span
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                    subscription.isPro
+                      ? isDark
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : isDark
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-amber-100 text-amber-900 border border-amber-300'
+                  }`}
+                >
                   {subscription.isPro ? 'PRO UNLIMITED' : 'FREE TIER'}
                 </span>
               </div>
-              <p className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-700 font-medium'}`}>
+              <p className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 {subscription.isPro
-                  ? '✨ You have unlimited 1-click form autofills, ATS cover letters, and custom AI responses.'
-                  : `Free tier: ${Math.max(0, (subscription.monthlyLimit || 50) - (subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0))} left out of ${subscription.monthlyLimit || 50} this month (${subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0} used). Resets on the 1st of each month.`}
+                  ? 'Unlimited 1-click autofills, cover letters, and custom AI responses.'
+                  : `${remainingQuota} of ${freeLimit} free applications remaining this month. Resets on the 1st.`}
               </p>
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setShowPricingModal(true)}
-                  className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-slate-950 font-extrabold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>{subscription.isPro ? 'Manage Plans & Pricing' : 'View Affordable Plans ($2.99 / $8.99)'}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowPricingModal(true)}
+                className="w-full py-2 rounded-lg bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-slate-950 font-extrabold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>{subscription.isPro ? 'Manage Subscription' : 'Upgrade to Pro ($2.99 / $8.99)'}</span>
+              </button>
             </div>
 
-            {/* Visual Theme Mode (Dark / Light) */}
-            <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
-              isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
+            {/* Visual Appearance */}
+            <div
+              className={`p-3 rounded-xl border flex items-center justify-between ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
               <div>
-                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Visual Appearance</h4>
+                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Appearance</h4>
                 <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Switch between Dark and Light mode.</p>
               </div>
-              <div className={`flex items-center gap-1 p-1 rounded-lg border ${
-                isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
-              }`}>
+              <div
+                className={`flex items-center gap-1 p-1 rounded-lg border ${
+                  isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => theme !== 'dark' && handleToggleTheme()}
@@ -1585,13 +1603,17 @@ export default function App() {
               </div>
             </div>
 
-            {/* On-Screen Floating Button Toggle */}
-            <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
-              isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
+            {/* On-Screen Floating Button */}
+            <div
+              className={`p-3 rounded-xl border flex items-center justify-between ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
               <div>
-                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>On-Screen Floating Button</h4>
-                <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Show 1-click floating button on web pages (default ON).</p>
+                <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>On-Screen Button</h4>
+                <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Show 1-click floating button on job web pages.
+                </p>
               </div>
               <button
                 type="button"
@@ -1599,7 +1621,6 @@ export default function App() {
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
                   showFloatingWidget ? 'bg-indigo-600' : isDark ? 'bg-slate-800' : 'bg-slate-300'
                 }`}
-                title={showFloatingWidget ? 'Click to disable' : 'Click to enable'}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1609,20 +1630,19 @@ export default function App() {
               </button>
             </div>
 
-            {/* License Key & Account Activation */}
-            <div className={`p-3.5 rounded-xl border space-y-2.5 ${
-              isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-cyan-400' : 'text-indigo-600'}`}>
-                Account & License Key
-              </span>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Activate a purchased license key or link your email.</p>
+            {/* License Key Activation */}
+            <div
+              className={`p-3 rounded-xl border space-y-2 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
+              <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Activate License Key</h4>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={licenseInput}
                   onChange={(e) => setLicenseInput(e.target.value)}
-                  placeholder="Paste License Key (e.g. LIFE-XXXX-YYYY)..."
+                  placeholder="Paste License Key or Email..."
                   className={`flex-1 text-xs p-2 rounded border focus:outline-none focus:border-indigo-500 ${
                     isDark
                       ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-600'
@@ -1632,27 +1652,27 @@ export default function App() {
                 <button
                   onClick={() => handleVerifyLicense()}
                   disabled={activatingLicense || !licenseInput.trim()}
-                  className={`px-3.5 py-2 rounded text-xs font-bold transition flex items-center justify-center ${
+                  className={`px-3 py-2 rounded text-xs font-bold transition flex items-center justify-center cursor-pointer ${
                     licenseInput.trim()
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shadow-sm'
-                      : (isDark ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300')
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
                   }`}
                 >
                   {activatingLicense ? 'Checking...' : 'Activate'}
                 </button>
               </div>
-              <div className={`text-[10px] pt-0.5 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                <span>Enter your official LynkZone license key issued upon verified payment.</span>
-              </div>
             </div>
 
-            {/* Profile Backup & Restore */}
-            <div className={`p-3.5 rounded-xl border space-y-2 ${
-              isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
+            {/* Backup & Restore Profile */}
+            <div
+              className={`p-3 rounded-xl border space-y-2 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
               <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Backup & Restore Profile</h4>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Export your profile data as JSON or import to another computer.</p>
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2">
                 <button
                   onClick={() => {
                     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(profile, null, 2));
@@ -1664,7 +1684,7 @@ export default function App() {
                     document.body.removeChild(link);
                     showToast('Profile exported!');
                   }}
-                  className="flex-1 py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 flex items-center justify-center gap-1.5"
+                  className="flex-1 py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" /> Export JSON
                 </button>
@@ -1696,42 +1716,44 @@ export default function App() {
               </div>
             </div>
 
-            {/* LynkZone WhatsApp & Manual Payments Card */}
-            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-              <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span>💬</span> LynkZone Direct WhatsApp Support
+            {/* WhatsApp Support Card */}
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+              <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wide">
+                LynkZone WhatsApp Support
               </span>
               <p className="text-xs text-slate-400">
-                Prefer direct local payments (Easypaisa, Jazzcash, Bank Transfer, Crypto) or need instant help? Chat directly with LynkZone.
+                Direct questions, feature requests, or local payment options (Easypaisa, Jazzcash, Bank, Crypto).
               </p>
               <a
                 href={`https://wa.me/923481974606?text=${encodeURIComponent(
-                  'Hello LynkZone Team! I want to inquire about AI Job Seeker Pro license & payment.'
+                  'Hello LynkZone! I have a question about AI Job Seeker.'
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-2 px-3 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition text-decoration-none cursor-pointer"
               >
-                <span>Chat with LynkZone on WhatsApp (+92 348 1974606) →</span>
+                <span>Chat on WhatsApp (+92 348 1974606)</span>
               </a>
             </div>
           </div>
         )}
       </main>
 
-      {/* Footer (Consistent with photo-tools) */}
-      <footer className="px-5 py-2.5 border-t border-slate-800/80 bg-[#090d16] text-[10px] text-slate-500 flex items-center justify-between">
-        <span>LynkZone • AI Job Seeker v1.0.0</span>
+      {/* Clean, Minimal Footer */}
+      <footer className="px-4 py-2 border-t border-slate-800/80 bg-[#090d16] text-[10px] text-slate-500 flex items-center justify-between">
+        <span>LynkZone • AI Job Seeker</span>
         <span className="flex items-center gap-1 text-slate-400">
-          <ShieldCheck className="w-3 h-3 text-emerald-400" /> Safe & Local Storage
+          <ShieldCheck className="w-3 h-3 text-emerald-400" /> Private & Local Storage
         </span>
       </footer>
 
       {/* ================= PRICING & UPGRADE MODAL ================= */}
       {showPricingModal && (
-        <div className={`absolute inset-0 z-50 backdrop-blur-md flex flex-col p-5 overflow-y-auto ${
-          isDark ? 'bg-[#090d16]/95 text-slate-100' : 'bg-white/98 text-slate-900 shadow-2xl'
-        }`}>
+        <div
+          className={`absolute inset-0 z-50 backdrop-blur-md flex flex-col p-5 overflow-y-auto ${
+            isDark ? 'bg-[#090d16]/95 text-slate-100' : 'bg-white/98 text-slate-900 shadow-2xl'
+          }`}
+        >
           {/* Modal Header */}
           <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2">
@@ -1750,42 +1772,35 @@ export default function App() {
             </button>
           </div>
 
-          <div className="py-3 text-center">
-            <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>Affordable & Fair Pricing</h2>
+          <div className="py-2.5 text-center">
+            <h2 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Simple, Fair Pricing</h2>
             <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Land interviews 10x faster. Apply to hundreds of jobs effortlessly.
+              Apply 10x faster and land more interviews.
             </p>
           </div>
 
-          {/* Pricing Cards (2 Affordable Tiers) */}
+          {/* Pricing Cards */}
           <div className="grid grid-cols-2 gap-3 my-2">
-            {/* Tier 1: Monthly Pro ($2.99 / mo) */}
+            {/* Monthly Pro */}
             <div
               onClick={() => setPricingTier('monthly')}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                 pricingTier === 'monthly'
-                  ? (isDark
-                      ? 'bg-gradient-to-b from-indigo-950/80 to-slate-900 border-indigo-500 shadow-md shadow-indigo-500/10'
-                      : 'bg-indigo-50/70 border-indigo-500 shadow-md shadow-indigo-500/15')
-                  : (isDark
-                      ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm')
+                  ? isDark
+                    ? 'bg-gradient-to-b from-indigo-950/80 to-slate-900 border-indigo-500 shadow-md shadow-indigo-500/10'
+                    : 'bg-indigo-50/70 border-indigo-500 shadow-md shadow-indigo-500/15'
+                  : isDark
+                  ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-bold ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Monthly Pro</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                    isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-800'
-                  }`}>
-                    Flexible
-                  </span>
-                </div>
+                <span className={`text-[11px] font-bold ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Monthly Pro</span>
                 <div className="flex items-baseline gap-1 my-1">
                   <span className={`text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>$2.99</span>
                   <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>/ mo</span>
                 </div>
-                <p className={`text-[10px] font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Unlimited applications for 30 days</p>
+                <p className={`text-[10px] font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Cancel anytime</p>
 
                 <ul className={`space-y-1.5 mt-3 text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   <li className="flex items-center gap-1.5">
@@ -1794,56 +1809,54 @@ export default function App() {
                   </li>
                   <li className="flex items-center gap-1.5">
                     <Check className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                    <span>AI Question Copilot</span>
+                    <span>AI Question Helper</span>
                   </li>
                   <li className="flex items-center gap-1.5">
                     <Check className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                    <span>ATS Cover Letters</span>
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <Check className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                    <span>Cancel Anytime</span>
+                    <span>Tailored Cover Letters</span>
                   </li>
                 </ul>
               </div>
 
               <div className={`mt-3 pt-2 border-t ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                <div className={`w-full py-1.5 text-center rounded text-[11px] font-bold ${
-                  pricingTier === 'monthly'
-                    ? (isDark ? 'text-indigo-300 bg-indigo-500/10' : 'text-indigo-800 bg-indigo-100')
-                    : (isDark ? 'text-slate-500' : 'text-slate-500')
-                }`}>
-                  {pricingTier === 'monthly' ? '✓ Selected' : 'Choose Monthly'}
+                <div
+                  className={`w-full py-1 text-center rounded text-[11px] font-bold ${
+                    pricingTier === 'monthly'
+                      ? isDark
+                        ? 'text-indigo-300 bg-indigo-500/10'
+                        : 'text-indigo-800 bg-indigo-100'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  {pricingTier === 'monthly' ? 'Selected' : 'Choose Monthly'}
                 </div>
               </div>
             </div>
 
-            {/* Tier 2: Lifetime Pass ($8.99 One-Time) */}
+            {/* Lifetime Pass */}
             <div
               onClick={() => setPricingTier('lifetime')}
               className={`p-3.5 rounded-xl border relative transition-all cursor-pointer flex flex-col justify-between ${
                 pricingTier === 'lifetime'
-                  ? (isDark
-                      ? 'bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 border-amber-500 shadow-md shadow-amber-500/10'
-                      : 'bg-amber-50/70 border-amber-500 shadow-md shadow-amber-500/15')
-                  : (isDark
-                      ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm')
+                  ? isDark
+                    ? 'bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 border-amber-500 shadow-md shadow-amber-500/10'
+                    : 'bg-amber-50/70 border-amber-500 shadow-md shadow-amber-500/15'
+                  : isDark
+                  ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
               }`}
             >
               <div className="absolute -top-2.5 right-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-sm">
-                BEST VALUE 🔥
+                BEST VALUE
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-bold ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>Lifetime Pass</span>
-                </div>
+                <span className={`text-[11px] font-bold ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>Lifetime Pass</span>
                 <div className="flex items-baseline gap-1 my-1">
                   <span className={`text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>$8.99</span>
                   <span className={`text-[11px] font-bold ${isDark ? 'text-amber-400/80' : 'text-amber-700'}`}>once</span>
                 </div>
-                <p className={`text-[10px] font-semibold ${isDark ? 'text-amber-300/90' : 'text-amber-800'}`}>Pay once, keep forever!</p>
+                <p className={`text-[10px] font-semibold ${isDark ? 'text-amber-300/90' : 'text-amber-800'}`}>Pay once, keep forever</p>
 
                 <ul className={`space-y-1.5 mt-3 text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   <li className="flex items-center gap-1.5">
@@ -1858,27 +1871,27 @@ export default function App() {
                     <Check className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                     <span>Lifetime Future Updates</span>
                   </li>
-                  <li className="flex items-center gap-1.5">
-                    <Check className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
-                    <span>Priority AI Speed</span>
-                  </li>
                 </ul>
               </div>
 
               <div className={`mt-3 pt-2 border-t ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                <div className={`w-full py-1.5 text-center rounded text-[11px] font-bold ${
-                  pricingTier === 'lifetime'
-                    ? (isDark ? 'text-amber-400 bg-amber-500/10' : 'text-amber-900 bg-amber-100')
-                    : (isDark ? 'text-slate-500' : 'text-slate-500')
-                }`}>
-                  {pricingTier === 'lifetime' ? '✓ Selected' : 'Choose Lifetime'}
+                <div
+                  className={`w-full py-1 text-center rounded text-[11px] font-bold ${
+                    pricingTier === 'lifetime'
+                      ? isDark
+                        ? 'text-amber-400 bg-amber-500/10'
+                        : 'text-amber-900 bg-amber-100'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  {pricingTier === 'lifetime' ? 'Selected' : 'Choose Lifetime'}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Action Button: Checkout via Stripe / Payment API */}
-          <div className="mt-2 space-y-2.5">
+          {/* Action Buttons */}
+          <div className="mt-2 space-y-2">
             <button
               onClick={() => handleStartCheckout(pricingTier)}
               disabled={loading}
@@ -1886,16 +1899,13 @@ export default function App() {
             >
               <Zap className="w-3.5 h-3.5 fill-current" />
               <span>
-                {pricingTier === 'lifetime'
-                  ? 'Proceed to Checkout — $8.99 Lifetime'
-                  : 'Proceed to Checkout — $2.99 / mo'}
+                {pricingTier === 'lifetime' ? 'Proceed to Checkout • $8.99 Lifetime' : 'Proceed to Checkout • $2.99 / mo'}
               </span>
             </button>
 
-            {/* LynkZone WhatsApp Quick Buy Button */}
             <a
               href={`https://wa.me/923481974606?text=${encodeURIComponent(
-                `Hello LynkZone Team! I want to purchase AI Job Seeker Pro (${
+                `Hello LynkZone! I want to purchase AI Job Seeker Pro (${
                   pricingTier === 'lifetime' ? 'Lifetime Pass $8.99' : 'Monthly Pro $2.99/mo'
                 }). Please send direct payment details & license key.`
               )}`}
@@ -1903,16 +1913,17 @@ export default function App() {
               rel="noopener noreferrer"
               className="w-full py-2 px-3 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-decoration-none"
             >
-              <span>💬</span>
               <span>Quick Buy via WhatsApp (+92 348 1974606)</span>
             </a>
 
-            {/* License Key & Account Activation Input */}
-            <div className={`p-2.5 rounded-lg border space-y-1.5 ${
-              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-            }`}>
+            {/* License Key Input */}
+            <div
+              className={`p-2 rounded-lg border space-y-1.5 ${
+                isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
               <span className={`text-[10px] block font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Already paid? Enter License Key or Email:
+                Already purchased? Enter your key:
               </span>
               <div className="flex gap-1.5">
                 <input
@@ -1929,17 +1940,16 @@ export default function App() {
                 <button
                   onClick={() => handleVerifyLicense()}
                   disabled={activatingLicense || !licenseInput.trim()}
-                  className={`px-3 py-1.5 rounded text-[11px] font-bold transition flex items-center justify-center ${
+                  className={`px-3 py-1.5 rounded text-[11px] font-bold transition flex items-center justify-center cursor-pointer ${
                     licenseInput.trim()
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shadow-sm'
-                      : (isDark ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300')
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
                   }`}
                 >
                   {activatingLicense ? 'Checking...' : 'Activate'}
                 </button>
-              </div>
-              <div className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                <span>Official license keys are issued upon verified payment.</span>
               </div>
             </div>
           </div>
@@ -2169,77 +2179,7 @@ function directAutofillScript(profile: any): number {
         }
       }
     }
-    // Location Preference / Remote
-    else if (/remote|hybrid|work[\s_-]?location|workplace[\s_-]?type/i.test(desc)) {
-      if (profile.work?.workLocationPreference) {
-        setVal(input, profile.work.workLocationPreference);
-        matched = true;
-      }
-    }
-    // Relocation
-    else if (/willing[\s_-]?to[\s_-]?relocate|relocat/i.test(desc)) {
-      if (profile.work?.willingToRelocate) {
-        setVal(input, profile.work.willingToRelocate);
-        matched = true;
-      }
-    }
-    // EEO Gender
-    else if (/gender|sex(?!\w)/i.test(desc)) {
-      if (profile.eeo?.gender && input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].text.toLowerCase().includes(profile.eeo.gender.toLowerCase())) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
-    // EEO Race
-    else if (/race|ethnicity/i.test(desc)) {
-      if (profile.eeo?.raceEthnicity && input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].text.toLowerCase().includes(profile.eeo.raceEthnicity.toLowerCase())) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
-    // EEO Veteran
-    else if (/veteran/i.test(desc)) {
-      if (input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].text.toLowerCase().includes('not') || select.options[i].text.toLowerCase().includes('decline')) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
-    // EEO Disability
-    else if (/disabilit/i.test(desc)) {
-      if (input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].text.toLowerCase().includes('no') || select.options[i].text.toLowerCase().includes('decline')) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
-    // Custom Answers Check
+    // Custom Saved Answers
     else if (profile.customAnswers) {
       for (const [key, value] of Object.entries(profile.customAnswers)) {
         const cleanKey = key.replace(/_/g, ' ').toLowerCase();

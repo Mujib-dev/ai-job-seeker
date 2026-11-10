@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'AI Job Seeker by LynkZone - 1-Click Form Autofill & AI Copilot',
     description: '1-click job application form autofill, tailored AI question responses, and cover letter copilot by LynkZone.',
-    version: '1.1.1',
+    version: '1.1.2',
     author: 'LynkZone',
     permissions: ['storage', 'activeTab', 'scripting'],
     host_permissions: ['https://*/*', 'http://*/*', 'file://*/*'],
