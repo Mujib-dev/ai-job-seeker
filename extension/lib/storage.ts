@@ -22,6 +22,7 @@ export async function getUserProfile(): Promise<UserProfile> {
       eeo: { ...DEFAULT_USER_PROFILE.eeo, ...(saved.eeo || {}) },
       skills: Array.isArray(saved.skills) ? saved.skills : DEFAULT_USER_PROFILE.skills,
       certifications: Array.isArray(saved.certifications) ? saved.certifications : (DEFAULT_USER_PROFILE.certifications || []),
+      sectionCustomFields: saved.sectionCustomFields || {},
       customAnswers: { ...DEFAULT_USER_PROFILE.customAnswers, ...(saved.customAnswers || {}) },
     };
   }

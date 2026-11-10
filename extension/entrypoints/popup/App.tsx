@@ -64,7 +64,6 @@ const PROFILE_CATEGORIES = [
   { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'eeo', label: 'Demographics', icon: ShieldCheck },
   { id: 'skills', label: 'Skills', icon: Zap },
-  { id: 'custom', label: '+ Custom Fields', icon: PlusCircle },
 ] as const;
 
 export default function App() {
@@ -97,13 +96,12 @@ export default function App() {
   const [coverLetter, setCoverLetter] = useState('');
 
   // Profile Form state
-  const [profileCategory, setProfileCategory] = useState<'contact' | 'links' | 'work' | 'education' | 'eeo' | 'skills' | 'custom'>('contact');
+  const [profileCategory, setProfileCategory] = useState<'contact' | 'links' | 'work' | 'education' | 'eeo' | 'skills'>('contact');
   const [newSkill, setNewSkill] = useState('');
   const [newCert, setNewCert] = useState('');
-  const [customKeyInput, setCustomKeyInput] = useState('');
-  const [customValInput, setCustomValInput] = useState('');
-  const [quickCustomKey, setQuickCustomKey] = useState('');
-  const [quickCustomVal, setQuickCustomVal] = useState('');
+  const [addingInputSection, setAddingInputSection] = useState<string | null>(null);
+  const [newSectionLabel, setNewSectionLabel] = useState('');
+  const [newSectionValue, setNewSectionValue] = useState('');
 
   // Payment & License Verification State
   const [licenseInput, setLicenseInput] = useState('');
@@ -132,8 +130,24 @@ export default function App() {
     const a = await getJobApplications();
     setApplications(a);
 
-    // If profile is empty (first time install), redirect directly to Profile tab!
-    if (!p.personal?.firstName && !p.personal?.email) {
+    // Check if user has already saved their profile previously
+    let hasSaved = false;
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        const flagRes = await chrome.storage.local.get('ai_job_seeker_has_saved_profile');
+        hasSaved = Boolean(flagRes.ai_job_seeker_has_saved_profile);
+      }
+    } catch {}
+
+    const hasAnyField = Boolean(
+      p.personal?.firstName?.trim() ||
+      p.personal?.email?.trim() ||
+      p.personal?.phone?.trim() ||
+      (p.customAnswers && Object.keys(p.customAnswers).length > 0)
+    );
+
+    // Only redirect to Profile tab if this is genuinely a fresh install with 0 saved details AND hasn't saved yet
+    if (!hasSaved && !hasAnyField) {
       setActiveTab('profile');
     }
 
@@ -390,9 +404,65 @@ export default function App() {
     showToast('Cover letter downloaded!');
   };
 
-  const handleSaveProfile = async () => {
-    await saveUserProfile(profile);
-    showToast('Profile saved successfully!');
+  // Auto-save helpers so typed details are immediately persisted to storage without losing any work
+  const updatePersonal = (field: keyof UserProfile['personal'], value: string) => {
+    const updated = {
+      ...profile,
+      personal: {
+        ...profile.personal,
+        [field]: value,
+      },
+    };
+    setProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const updateWork = (field: keyof UserProfile['work'], value: string) => {
+    const updated = {
+      ...profile,
+      work: {
+        ...profile.work,
+        [field]: value,
+      },
+    };
+    setProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const updateEducation = (field: keyof UserProfile['education'], value: string) => {
+    const updated = {
+      ...profile,
+      education: {
+        ...profile.education,
+        [field]: value,
+      },
+    };
+    setProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const updateEEO = (field: keyof UserProfile['eeo'], value: string) => {
+    const updated = {
+      ...profile,
+      eeo: {
+        ...profile.eeo,
+        [field]: value,
+      },
+    };
+    setProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const updateAuth = (field: keyof UserProfile['authorization'], value: any) => {
+    const updated = {
+      ...profile,
+      authorization: {
+        ...profile.authorization,
+        [field]: value,
+      },
+    };
+    setProfile(updated);
+    saveUserProfile(updated);
   };
 
   const handleAddSkill = () => {
@@ -425,49 +495,195 @@ export default function App() {
     saveUserProfile(updated);
   };
 
-  const handleAddCustomField = () => {
-    if (customKeyInput.trim() && customValInput.trim()) {
-      const cleanKey = customKeyInput.trim().toLowerCase().replace(/\s+/g, '_');
-      const updated = {
-        ...profile,
-        customAnswers: {
-          ...(profile.customAnswers || {}),
-          [cleanKey]: customValInput.trim(),
-        },
-      };
-      setProfile(updated);
-      saveUserProfile(updated);
-      setCustomKeyInput('');
-      setCustomValInput('');
-      showToast('Custom field added!');
+  // When user clicks Save Profile: saves immediately AND triggers autofill on active tab right then!
+  const handleSaveProfile = async () => {
+    try {
+      await saveUserProfile(profile);
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await chrome.storage.local.set({ ai_job_seeker_has_saved_profile: true });
+      }
+      showToast('💾 Profile saved! Autofilling application now...');
+      setActiveTab('autofill');
+
+      setTimeout(() => {
+        handleTriggerAutofill(profile);
+      }, 150);
+    } catch (err) {
+      console.error('Save profile error:', err);
+      showToast('Profile saved!');
     }
   };
 
-  const handleSaveAndAutofillCustom = async () => {
-    if (!quickCustomKey.trim() || !quickCustomVal.trim()) return;
-    const cleanKey = quickCustomKey.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const updated = {
+  const handleAddSectionField = (section: string) => {
+    if (!newSectionLabel.trim()) return;
+    const label = newSectionLabel.trim();
+    const value = newSectionValue.trim();
+    const id = `f_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
+    const currentSectionFields = (profile.sectionCustomFields && profile.sectionCustomFields[section]) || [];
+    const newFields = [...currentSectionFields, { id, label, value }];
+    const cleanKey = label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    const updated: UserProfile = {
       ...profile,
+      sectionCustomFields: {
+        ...(profile.sectionCustomFields || {}),
+        [section]: newFields,
+      },
       customAnswers: {
         ...(profile.customAnswers || {}),
-        [cleanKey]: quickCustomVal.trim(),
+        [cleanKey]: value,
       },
     };
-    setProfile(updated);
-    await saveUserProfile(updated);
-    const savedLabel = quickCustomKey.trim();
-    setQuickCustomKey('');
-    setQuickCustomVal('');
-    showToast(`Saved "${savedLabel}"! Autofilling form...`);
-    handleTriggerAutofill(updated);
-  };
 
-  const handleRemoveCustomField = (key: string) => {
-    const nextCustom = { ...(profile.customAnswers || {}) };
-    delete nextCustom[key];
-    const updated = { ...profile, customAnswers: nextCustom };
     setProfile(updated);
     saveUserProfile(updated);
+    setNewSectionLabel('');
+    setNewSectionValue('');
+    setAddingInputSection(null);
+    showToast(`Added "${label}"!`);
+  };
+
+  const handleUpdateSectionFieldValue = (section: string, id: string, newValue: string) => {
+    const currentSectionFields = (profile.sectionCustomFields && profile.sectionCustomFields[section]) || [];
+    const target = currentSectionFields.find((f) => f.id === id);
+    if (!target) return;
+
+    const newFields = currentSectionFields.map((f) => (f.id === id ? { ...f, value: newValue } : f));
+    const cleanKey = target.label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    const updated: UserProfile = {
+      ...profile,
+      sectionCustomFields: {
+        ...(profile.sectionCustomFields || {}),
+        [section]: newFields,
+      },
+      customAnswers: {
+        ...(profile.customAnswers || {}),
+        [cleanKey]: newValue,
+      },
+    };
+
+    setProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const handleRemoveSectionField = (section: string, id: string) => {
+    const currentSectionFields = (profile.sectionCustomFields && profile.sectionCustomFields[section]) || [];
+    const target = currentSectionFields.find((f) => f.id === id);
+    const newFields = currentSectionFields.filter((f) => f.id !== id);
+
+    const nextCustomAnswers = { ...(profile.customAnswers || {}) };
+    if (target) {
+      const cleanKey = target.label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      delete nextCustomAnswers[cleanKey];
+    }
+
+    const updated: UserProfile = {
+      ...profile,
+      sectionCustomFields: {
+        ...(profile.sectionCustomFields || {}),
+        [section]: newFields,
+      },
+      customAnswers: nextCustomAnswers,
+    };
+
+    setProfile(updated);
+    saveUserProfile(updated);
+    showToast('Field removed');
+  };
+
+  const renderSectionCustomFields = (section: string) => {
+    const fields = (profile.sectionCustomFields && profile.sectionCustomFields[section]) || [];
+    return (
+      <>
+        {/* Inline Adder Form if currently active for this section */}
+        {addingInputSection === section && (
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-indigo-500/50 space-y-2 mt-2">
+            <div className="flex items-center justify-between text-[11px] text-indigo-400 font-semibold">
+              <span>Add Custom Input to this section</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingInputSection(null);
+                  setNewSectionLabel('');
+                  setNewSectionValue('');
+                }}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-400">Field Name</label>
+                <input
+                  type="text"
+                  value={newSectionLabel}
+                  onChange={(e) => setNewSectionLabel(e.target.value)}
+                  placeholder="e.g. Father's Name"
+                  className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400">Value to Fill</label>
+                <input
+                  type="text"
+                  value={newSectionValue}
+                  onChange={(e) => setNewSectionValue(e.target.value)}
+                  placeholder="e.g. Muhammad Khan"
+                  className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingInputSection(null);
+                  setNewSectionLabel('');
+                  setNewSectionValue('');
+                }}
+                className="px-2.5 py-1 rounded text-xs text-slate-400 hover:text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddSectionField(section)}
+                disabled={!newSectionLabel.trim()}
+                className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Field
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Render all custom fields for this section */}
+        {fields.map((f) => (
+          <div key={f.id} className="space-y-1 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-slate-400 font-medium">{f.label}</label>
+              <button
+                type="button"
+                onClick={() => handleRemoveSectionField(section, f.id)}
+                className="text-slate-500 hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                title="Delete this field"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={f.value}
+              onChange={(e) => handleUpdateSectionFieldValue(section, f.id, e.target.value)}
+              className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+        ))}
+      </>
+    );
   };
 
   const handleStartCheckout = async (plan: 'monthly' | 'lifetime' = pricingTier) => {
@@ -773,62 +989,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick Missing / Custom Field Adder */}
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
-                  <h4 className="text-xs font-semibold text-white">Missing a field on this page?</h4>
-                </div>
-                <span className="text-[10px] text-slate-500">Custom Input</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Add any unique question or input (e.g. Father's Name, Emergency Contact) to autofill it instantly.
-              </p>
-
-              {/* Quick Preset Chips */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-                {["Father's Name", 'Passport Number', 'Driver License', 'Emergency Contact', 'Notice Period', 'Expected Salary'].map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => {
-                      setQuickCustomKey(preset);
-                      if (preset === 'Notice Period' && profile.work?.noticePeriod) setQuickCustomVal(profile.work.noticePeriod);
-                      else if (preset === 'Expected Salary' && profile.work?.salaryExpectations) setQuickCustomVal(profile.work.salaryExpectations);
-                    }}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 border border-slate-700/60 transition whitespace-nowrap cursor-pointer"
-                  >
-                    + {preset}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                <input
-                  type="text"
-                  value={quickCustomKey}
-                  onChange={(e) => setQuickCustomKey(e.target.value)}
-                  placeholder="Field Name (e.g. Father Name)"
-                  className="w-full text-xs p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-                <input
-                  type="text"
-                  value={quickCustomVal}
-                  onChange={(e) => setQuickCustomVal(e.target.value)}
-                  placeholder="Value to fill..."
-                  className="w-full text-xs p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <button
-                onClick={handleSaveAndAutofillCustom}
-                disabled={!quickCustomKey.trim() || !quickCustomVal.trim()}
-                className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" /> Save & Autofill Field Now
-              </button>
-            </div>
-
             {/* AI Custom Question Responder */}
             <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -958,9 +1118,9 @@ export default function App() {
               </div>
               <button
                 onClick={handleSaveProfile}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow cursor-pointer transition flex items-center gap-1"
+                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-1.5 active:scale-95"
               >
-                <Check className="w-3.5 h-3.5" /> Save Profile
+                <Zap className="w-3.5 h-3.5 fill-white" /> Save & Autofill Now
               </button>
             </div>
 
@@ -988,7 +1148,22 @@ export default function App() {
             {/* CATEGORY 1: CONTACT */}
             {profileCategory === 'contact' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Contact & Address</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Contact & Address</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingInputSection(addingInputSection === 'contact' ? null : 'contact');
+                      setNewSectionLabel('');
+                      setNewSectionValue('');
+                    }}
+                    className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Add custom field to Contact & Address"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-400">First Name</label>
@@ -996,7 +1171,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.firstName}
                       placeholder="e.g. Mujib"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, firstName: e.target.value } })}
+                      onChange={(e) => updatePersonal('firstName', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1006,7 +1181,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.lastName}
                       placeholder="e.g. Ur Rahman"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, lastName: e.target.value } })}
+                      onChange={(e) => updatePersonal('lastName', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1019,7 +1194,7 @@ export default function App() {
                       type="email"
                       value={profile.personal.email}
                       placeholder="e.g. mujiburrahman.dev@gmail.com"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, email: e.target.value } })}
+                      onChange={(e) => updatePersonal('email', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1029,7 +1204,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.phone}
                       placeholder="e.g. +92 348 1974606"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, phone: e.target.value } })}
+                      onChange={(e) => updatePersonal('phone', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1041,7 +1216,7 @@ export default function App() {
                     type="text"
                     value={profile.personal.cnic || ''}
                     placeholder="e.g. 17301-1234567-1"
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, cnic: e.target.value } })}
+                    onChange={(e) => updatePersonal('cnic', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -1052,7 +1227,7 @@ export default function App() {
                     type="text"
                     value={profile.personal.address}
                     placeholder="e.g. LynkZone Tech Center, 123 Main St"
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, address: e.target.value } })}
+                    onChange={(e) => updatePersonal('address', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -1064,7 +1239,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.city}
                       placeholder="e.g. Peshawar"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, city: e.target.value } })}
+                      onChange={(e) => updatePersonal('city', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1074,7 +1249,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.state}
                       placeholder="e.g. KP"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, state: e.target.value } })}
+                      onChange={(e) => updatePersonal('state', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1084,7 +1259,7 @@ export default function App() {
                       type="text"
                       value={profile.personal.zipCode}
                       placeholder="e.g. 25000"
-                      onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, zipCode: e.target.value } })}
+                      onChange={(e) => updatePersonal('zipCode', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1096,23 +1271,41 @@ export default function App() {
                     type="text"
                     value={profile.personal.country}
                     placeholder="e.g. Pakistan"
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, country: e.target.value } })}
+                    onChange={(e) => updatePersonal('country', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
+
+                {/* Custom Section Inputs added to Contact & Address */}
+                {renderSectionCustomFields('contact')}
               </div>
             )}
 
             {/* CATEGORY 2: LINKS */}
             {profileCategory === 'links' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Online Profiles</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Online Profiles & Links</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingInputSection(addingInputSection === 'links' ? null : 'links');
+                      setNewSectionLabel('');
+                      setNewSectionValue('');
+                    }}
+                    className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Add custom link"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
                 <div>
                   <label className="text-[10px] text-slate-400">LinkedIn URL</label>
                   <input
                     type="url"
                     value={profile.personal.linkedIn}
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, linkedIn: e.target.value } })}
+                    onChange={(e) => updatePersonal('linkedIn', e.target.value)}
                     placeholder="https://linkedin.com/in/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -1122,7 +1315,7 @@ export default function App() {
                   <input
                     type="url"
                     value={profile.personal.github}
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, github: e.target.value } })}
+                    onChange={(e) => updatePersonal('github', e.target.value)}
                     placeholder="https://github.com/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -1132,7 +1325,7 @@ export default function App() {
                   <input
                     type="url"
                     value={profile.personal.portfolio}
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, portfolio: e.target.value } })}
+                    onChange={(e) => updatePersonal('portfolio', e.target.value)}
                     placeholder="https://lynkzone.dev"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
@@ -1142,18 +1335,36 @@ export default function App() {
                   <input
                     type="text"
                     value={profile.personal.twitter || ''}
-                    onChange={(e) => setProfile({ ...profile, personal: { ...profile.personal, twitter: e.target.value } })}
+                    onChange={(e) => updatePersonal('twitter', e.target.value)}
                     placeholder="https://x.com/mujiburrahman"
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
+
+                {/* Custom Section Inputs added to Links */}
+                {renderSectionCustomFields('links')}
               </div>
             )}
 
             {/* CATEGORY 3: WORK & PREFERENCES */}
             {profileCategory === 'work' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Work & Experience</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Work & Experience</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingInputSection(addingInputSection === 'work' ? null : 'work');
+                      setNewSectionLabel('');
+                      setNewSectionValue('');
+                    }}
+                    className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Add custom work field"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-400">Current Job Title</label>
@@ -1161,7 +1372,7 @@ export default function App() {
                       type="text"
                       value={profile.work.currentTitle}
                       placeholder="e.g. Lead Software Engineer"
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, currentTitle: e.target.value } })}
+                      onChange={(e) => updateWork('currentTitle', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1171,7 +1382,7 @@ export default function App() {
                       type="text"
                       value={profile.work.currentCompany}
                       placeholder="e.g. LynkZone"
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, currentCompany: e.target.value } })}
+                      onChange={(e) => updateWork('currentCompany', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1184,7 +1395,7 @@ export default function App() {
                       type="text"
                       value={profile.work.yearsExperience}
                       placeholder="e.g. 5"
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, yearsExperience: e.target.value } })}
+                      onChange={(e) => updateWork('yearsExperience', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1194,7 +1405,7 @@ export default function App() {
                       type="text"
                       value={profile.work.salaryExpectations}
                       placeholder="e.g. $80,000 / year or Negotiable"
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, salaryExpectations: e.target.value } })}
+                      onChange={(e) => updateWork('salaryExpectations', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1205,7 +1416,7 @@ export default function App() {
                     <label className="text-[10px] text-slate-400">Work Location</label>
                     <select
                       value={profile.work.workLocationPreference || 'Remote'}
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, workLocationPreference: e.target.value } })}
+                      onChange={(e) => updateWork('workLocationPreference', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="Remote">Remote</option>
@@ -1218,7 +1429,7 @@ export default function App() {
                     <label className="text-[10px] text-slate-400">Relocate?</label>
                     <select
                       value={profile.work.willingToRelocate || 'Negotiable'}
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, willingToRelocate: e.target.value } })}
+                      onChange={(e) => updateWork('willingToRelocate', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="Yes">Yes</option>
@@ -1232,7 +1443,7 @@ export default function App() {
                       type="text"
                       value={profile.work.noticePeriod || 'Immediate'}
                       placeholder="e.g. 2 weeks or Immediate"
-                      onChange={(e) => setProfile({ ...profile, work: { ...profile.work, noticePeriod: e.target.value } })}
+                      onChange={(e) => updateWork('noticePeriod', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1244,24 +1455,42 @@ export default function App() {
                     rows={3}
                     value={profile.work.summary}
                     placeholder="e.g. Full-stack software engineer with 5+ years building web and mobile applications..."
-                    onChange={(e) => setProfile({ ...profile, work: { ...profile.work, summary: e.target.value } })}
+                    onChange={(e) => updateWork('summary', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200 resize-none"
                   />
                 </div>
+
+                {/* Custom Section Inputs added to Work */}
+                {renderSectionCustomFields('work')}
               </div>
             )}
 
             {/* CATEGORY 4: EDUCATION & LEGAL */}
             {profileCategory === 'education' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Education & Authorization</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Education & Authorization</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingInputSection(addingInputSection === 'education' ? null : 'education');
+                      setNewSectionLabel('');
+                      setNewSectionValue('');
+                    }}
+                    className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Add custom education field"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
                 <div>
                   <label className="text-[10px] text-slate-400">University / College</label>
                   <input
                     type="text"
                     value={profile.education.school}
                     placeholder="e.g. University of California, Berkeley"
-                    onChange={(e) => setProfile({ ...profile, education: { ...profile.education, school: e.target.value } })}
+                    onChange={(e) => updateEducation('school', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   />
                 </div>
@@ -1272,7 +1501,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.education.degree}
-                      onChange={(e) => setProfile({ ...profile, education: { ...profile.education, degree: e.target.value } })}
+                      onChange={(e) => updateEducation('degree', e.target.value)}
                       placeholder="e.g. Bachelor of Science"
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1282,7 +1511,7 @@ export default function App() {
                     <input
                       type="text"
                       value={profile.education.fieldOfStudy}
-                      onChange={(e) => setProfile({ ...profile, education: { ...profile.education, fieldOfStudy: e.target.value } })}
+                      onChange={(e) => updateEducation('fieldOfStudy', e.target.value)}
                       placeholder="e.g. Computer Science"
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
@@ -1296,7 +1525,7 @@ export default function App() {
                       type="text"
                       value={profile.education.graduationYear}
                       placeholder="e.g. 2024"
-                      onChange={(e) => setProfile({ ...profile, education: { ...profile.education, graduationYear: e.target.value } })}
+                      onChange={(e) => updateEducation('graduationYear', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1306,7 +1535,7 @@ export default function App() {
                       type="text"
                       value={profile.education.gpa}
                       placeholder="e.g. 3.8"
-                      onChange={(e) => setProfile({ ...profile, education: { ...profile.education, gpa: e.target.value } })}
+                      onChange={(e) => updateEducation('gpa', e.target.value)}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     />
                   </div>
@@ -1317,12 +1546,7 @@ export default function App() {
                     <label className="text-[10px] text-slate-400">Authorized to Work?</label>
                     <select
                       value={profile.authorization.legallyAuthorized ? 'yes' : 'no'}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          authorization: { ...profile.authorization, legallyAuthorized: e.target.value === 'yes' },
-                        })
-                      }
+                      onChange={(e) => updateAuth('legallyAuthorized', e.target.value === 'yes')}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="yes">Yes</option>
@@ -1333,12 +1557,7 @@ export default function App() {
                     <label className="text-[10px] text-slate-400">Require Sponsorship?</label>
                     <select
                       value={profile.authorization.sponsorshipRequired ? 'yes' : 'no'}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          authorization: { ...profile.authorization, sponsorshipRequired: e.target.value === 'yes' },
-                        })
-                      }
+                      onChange={(e) => updateAuth('sponsorshipRequired', e.target.value === 'yes')}
                       className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                     >
                       <option value="no">No</option>
@@ -1346,19 +1565,37 @@ export default function App() {
                     </select>
                   </div>
                 </div>
+
+                {/* Custom Section Inputs added to Education */}
+                {renderSectionCustomFields('education')}
               </div>
             )}
 
             {/* CATEGORY 5: EEO / DEMOGRAPHICS */}
             {profileCategory === 'eeo' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Demographics (EEO)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Demographics (EEO)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingInputSection(addingInputSection === 'eeo' ? null : 'eeo');
+                      setNewSectionLabel('');
+                      setNewSectionValue('');
+                    }}
+                    className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Add custom demographic field"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                </div>
 
                 <div>
                   <label className="text-[10px] text-slate-400">Gender Identity</label>
                   <select
                     value={profile.eeo?.gender || 'Decline to self-identify'}
-                    onChange={(e) => setProfile({ ...profile, eeo: { ...profile.eeo, gender: e.target.value } })}
+                    onChange={(e) => updateEEO('gender', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   >
                     <option value="Male">Male</option>
@@ -1372,7 +1609,7 @@ export default function App() {
                   <label className="text-[10px] text-slate-400">Race / Ethnicity</label>
                   <select
                     value={profile.eeo?.raceEthnicity || 'Decline to self-identify'}
-                    onChange={(e) => setProfile({ ...profile, eeo: { ...profile.eeo, raceEthnicity: e.target.value } })}
+                    onChange={(e) => updateEEO('raceEthnicity', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   >
                     <option value="White">White</option>
@@ -1388,7 +1625,7 @@ export default function App() {
                   <label className="text-[10px] text-slate-400">Veteran Status</label>
                   <select
                     value={profile.eeo?.veteranStatus || 'I am not a protected veteran'}
-                    onChange={(e) => setProfile({ ...profile, eeo: { ...profile.eeo, veteranStatus: e.target.value } })}
+                    onChange={(e) => updateEEO('veteranStatus', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   >
                     <option value="I am not a protected veteran">I am not a protected veteran</option>
@@ -1401,7 +1638,7 @@ export default function App() {
                   <label className="text-[10px] text-slate-400">Disability Status</label>
                   <select
                     value={profile.eeo?.disabilityStatus || 'No, I do not have a disability'}
-                    onChange={(e) => setProfile({ ...profile, eeo: { ...profile.eeo, disabilityStatus: e.target.value } })}
+                    onChange={(e) => updateEEO('disabilityStatus', e.target.value)}
                     className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
                   >
                     <option value="No, I do not have a disability">No, I do not have a disability</option>
@@ -1409,6 +1646,9 @@ export default function App() {
                     <option value="I decline to self-identify">I decline to self-identify</option>
                   </select>
                 </div>
+
+                {/* Custom Section Inputs added to EEO */}
+                {renderSectionCustomFields('eeo')}
               </div>
             )}
 
@@ -1499,83 +1739,17 @@ export default function App() {
               </div>
             )}
 
-            {/* CATEGORY 7: CUSTOM FIELDS & MISSING INPUTS */}
-            {profileCategory === 'custom' && (
-              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Custom Fields & Missing Inputs</span>
-                  <span className="text-[10px] text-slate-500">{Object.keys(profile.customAnswers || {}).length} saved</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Save missing application inputs (e.g. Father's Name, Driver's License, Emergency Contact) so they autofill automatically.
-                </p>
-
-                {/* Preset Chips */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-                  {["Father's Name", "Mother's Name", 'Passport Number', 'Driver License', 'Emergency Contact', 'Notice Period', 'Expected Salary'].map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => {
-                        setCustomKeyInput(preset);
-                        if (preset === 'Notice Period' && profile.work?.noticePeriod) setCustomValInput(profile.work.noticePeriod);
-                        else if (preset === 'Expected Salary' && profile.work?.salaryExpectations) setCustomValInput(profile.work.salaryExpectations);
-                      }}
-                      className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 border border-slate-700/60 transition whitespace-nowrap cursor-pointer"
-                    >
-                      + {preset}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-2 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
-                  <input
-                    type="text"
-                    value={customKeyInput}
-                    onChange={(e) => setCustomKeyInput(e.target.value)}
-                    placeholder="Field name or question (e.g. Father's Name, emergency contact)..."
-                    className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200"
-                  />
-                  <textarea
-                    rows={2}
-                    value={customValInput}
-                    onChange={(e) => setCustomValInput(e.target.value)}
-                    placeholder="Your saved answer or value to fill..."
-                    className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200 resize-none"
-                  />
-                  <button
-                    onClick={handleAddCustomField}
-                    disabled={!customKeyInput.trim() || !customValInput.trim()}
-                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Custom Field
-                  </button>
-                </div>
-
-                <div className="space-y-2 max-h-44 overflow-y-auto pt-1">
-                  {Object.keys(profile.customAnswers || {}).length === 0 ? (
-                    <p className="text-[11px] text-slate-500 italic text-center py-2">
-                      No custom fields added yet. Add common application questions or missing inputs above!
-                    </p>
-                  ) : (
-                    Object.entries(profile.customAnswers || {}).map(([key, val]) => (
-                      <div key={key} className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-xs flex justify-between gap-2 items-center">
-                        <div className="overflow-hidden">
-                          <span className="font-semibold text-indigo-400 block truncate capitalize">{key.replace(/_/g, ' ')}</span>
-                          <p className="text-slate-300 text-[11px] line-clamp-2">{val}</p>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveCustomField(key)}
-                          className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0 cursor-pointer"
-                          title="Remove custom field"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Bottom Save & Autofill Action Bar */}
+            <div className="pt-2 sticky bottom-0 bg-slate-950/90 backdrop-blur-sm pb-1">
+              <button
+                onClick={handleSaveProfile}
+                disabled={loading}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer transition active:scale-[0.99] disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4 fill-white" />
+                <span>Save Profile & Autofill Form Now</span>
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,3 +1,9 @@
+export interface CustomSectionField {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface UserProfile {
   personal: {
     firstName: string;
@@ -48,6 +54,7 @@ export interface UserProfile {
   };
   skills: string[];
   certifications: string[];
+  sectionCustomFields?: Record<string, CustomSectionField[]>;
   customAnswers: Record<string, string>;
 }
 
@@ -121,5 +128,6 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   },
   skills: [],
   certifications: [],
+  sectionCustomFields: {},
   customAnswers: {},
 };
