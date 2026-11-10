@@ -209,8 +209,13 @@ export default function App() {
               }
             } else {
               setLoading(false);
-              showToast(`✨ Success! ${response.filledCount} fields autofilled.`);
-              await recordApplicationAndUsage();
+              const filled = response.filledCount ?? 0;
+              if (filled > 0) {
+                showToast(`✨ Success! ${filled} fields autofilled.`);
+                await recordApplicationAndUsage();
+              } else {
+                showToast('ℹ️ No empty application fields found on this page.');
+              }
             }
           });
         }

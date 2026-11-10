@@ -351,21 +351,28 @@ function injectFloatingWidget() {
       }
 
       const result = autofillForm(profile);
-      await incrementUsage();
-      const remaining = Math.max(0, limit - (count + 1));
 
-      btn.style.opacity = '1';
-      btn.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-        <span>Filled ${result.filledFieldsCount} Fields!</span>
-      `;
+      if (result.filledFieldsCount > 0) {
+        await incrementUsage();
+        const remaining = Math.max(0, limit - (count + 1));
 
-      const toastMsg = sub.isPro
-        ? `✨ Successfully filled ${result.filledFieldsCount} fields!`
-        : `✨ Filled ${result.filledFieldsCount} fields! (${remaining} left out of ${limit} this month)`;
-      showWidgetToast(container, toastMsg);
+        btn.style.opacity = '1';
+        btn.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Filled ${result.filledFieldsCount} Fields!</span>
+        `;
+
+        const toastMsg = sub.isPro
+          ? `✨ Successfully filled ${result.filledFieldsCount} fields!`
+          : `✨ Filled ${result.filledFieldsCount} fields! (${remaining} left out of ${limit} this month)`;
+        showWidgetToast(container, toastMsg);
+      } else {
+        btn.style.opacity = '1';
+        btn.innerHTML = `<span>No Fields Found</span>`;
+        showWidgetToast(container, 'ℹ️ No matching application fields found on this page.');
+      }
       setTimeout(resetBtn, 2500);
     } catch (err: any) {
       console.error('AI Job Seeker Autofill error:', err);
