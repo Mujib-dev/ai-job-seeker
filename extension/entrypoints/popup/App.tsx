@@ -1738,18 +1738,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Bottom Save & Autofill Action Bar */}
-            <div className="pt-2 sticky bottom-0 bg-slate-950/90 backdrop-blur-sm pb-1">
-              <button
-                onClick={handleSaveProfile}
-                disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer transition active:scale-[0.99] disabled:opacity-50"
-              >
-                <Zap className="w-4 h-4 fill-white" />
-                <span>Save Profile & Autofill Form Now</span>
-              </button>
-            </div>
           </div>
         )}
 
