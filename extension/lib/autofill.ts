@@ -6,23 +6,41 @@ interface AutofillResult {
   unfilledFields: string[];
 }
 
-// Dispatches standard DOM events so modern single-page apps (React, Angular, Vue) register the value changes
-export function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+// Dispatches standard DOM events so modern single-page apps (React, Angular, Vue, Svelte) register the value changes
+export function setNativeValue(
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  value: string | undefined | null
+): boolean {
+  if (!value || typeof value !== 'string' || !value.trim()) {
+    return false;
+  }
+
+  const trimmed = value.trim();
+
+  // 1. Reset React 16+ internal value tracker so React tracks the programmatic update
+  const tracker = (element as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue('');
+  }
+
+  // 2. Use prototype descriptor setter to bypass framework intercepts
   const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
   const prototype = Object.getPrototypeOf(element);
   const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
 
   if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
-    prototypeValueSetter.call(element, value);
+    prototypeValueSetter.call(element, trimmed);
   } else if (valueSetter) {
-    valueSetter.call(element, value);
+    valueSetter.call(element, trimmed);
   } else {
-    element.value = value;
+    element.value = trimmed;
   }
 
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-  element.dispatchEvent(new Event('change', { bubbles: true }));
-  element.dispatchEvent(new Event('blur', { bubbles: true }));
+  // 3. Dispatch standard bubbling & composed input/change events
+  element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+
+  return true;
 }
 
 function getFieldDescriptor(el: HTMLElement): string {
@@ -30,9 +48,11 @@ function getFieldDescriptor(el: HTMLElement): string {
   if (el.id) parts.push(el.id);
   if (el.getAttribute('name')) parts.push(el.getAttribute('name')!);
   if (el.getAttribute('placeholder')) parts.push(el.getAttribute('placeholder')!);
+  if (el.getAttribute('type')) parts.push(el.getAttribute('type')!);
   if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label')!);
   if (el.getAttribute('autocomplete')) parts.push(el.getAttribute('autocomplete')!);
   if (el.getAttribute('title')) parts.push(el.getAttribute('title')!);
+  if (el.getAttribute('data-testid')) parts.push(el.getAttribute('data-testid')!);
 
   // Check linked label via for="id"
   const id = el.getAttribute('id');
@@ -50,7 +70,7 @@ function getFieldDescriptor(el: HTMLElement): string {
   // Check preceding sibling or header
   let prev = el.previousElementSibling;
   while (prev) {
-    if (prev.tagName.toLowerCase() === 'label' || prev.className.includes('label')) {
+    if (prev.tagName.toLowerCase() === 'label' || prev.className?.includes?.('label')) {
       parts.push(prev.textContent?.trim() || '');
       break;
     }
@@ -97,124 +117,102 @@ export function autofillForm(profile: UserProfile): AutofillResult {
       if ((input as HTMLInputElement).maxLength === 11 || /03\d{2}/.test(desc)) {
         phoneVal = phoneVal.replace(/^\+92\s?/, '0').replace(/\s+/g, '');
       }
-      setNativeValue(input, phoneVal);
-      matched = true;
+      matched = setNativeValue(input, phoneVal);
     }
     // Email (Strictly exclude mobile/phone)
-    else if (/e[\s_-]?mail|email[\s_-]?address/i.test(desc) && !/phone|mobile|tel|cell/i.test(desc)) {
-      setNativeValue(input, profile.personal?.email || '');
-      matched = true;
+    else if ((/e[\s_-]?mail|email[\s_-]?address/i.test(desc) || (input as HTMLInputElement).type === 'email') && !/phone|mobile|tel|cell/i.test(desc)) {
+      matched = setNativeValue(input, profile.personal?.email);
     }
     // User ID / CNIC / NICOP / Afghan Refugee / National ID
     else if (/cnic|nicop|afghan[\s_-]?refugee|por(?!\w)|national[\s_-]?id|identity[\s_-]?card|user[\s_-]?id/i.test(desc)) {
-      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '17301-1234567-1';
-      if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc)) {
-        idVal = idVal.replace(/\D/g, '');
+      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '';
+      if (idVal) {
+        if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc)) {
+          idVal = idVal.replace(/\D/g, '');
+        }
+        matched = setNativeValue(input, idVal);
       }
-      setNativeValue(input, idVal);
-      matched = true;
     }
     // First Name
     else if (/first[\s_-]?name|given[\s_-]?name|fname/i.test(desc) && !/last|full|sur/i.test(desc)) {
-      setNativeValue(input, profile.personal?.firstName || '');
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.firstName);
     }
     // Last Name
     else if (/last[\s_-]?name|family[\s_-]?name|surname|lname/i.test(desc) && !/first/i.test(desc)) {
-      setNativeValue(input, profile.personal?.lastName || '');
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.lastName);
     }
     // Full Name
     else if (/full[\s_-]?name|^name$|candidate[\s_-]?name/i.test(desc) && !/first|last|company|school/i.test(desc)) {
-      setNativeValue(input, `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim());
-      matched = true;
+      const fullName = `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim();
+      matched = setNativeValue(input, fullName);
     }
     // LinkedIn
     else if (/linkedin/i.test(desc)) {
-      setNativeValue(input, profile.personal.linkedIn);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.linkedIn);
     }
     // GitHub
     else if (/github/i.test(desc)) {
-      setNativeValue(input, profile.personal.github);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.github);
     }
     // Twitter / X
     else if (/twitter|x\.com/i.test(desc)) {
-      if (profile.personal.twitter) {
-        setNativeValue(input, profile.personal.twitter);
-        matched = true;
-      }
+      matched = setNativeValue(input, profile.personal?.twitter);
     }
     // Website / Portfolio
     else if (/portfolio|website|personal[\s_-]?site|blog|web[\s_-]?page/i.test(desc)) {
-      setNativeValue(input, profile.personal.portfolio);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.portfolio);
     }
     // Street Address
     else if (/street|address[\s_-]?line[\s_-]?1|address$/i.test(desc) && !/email/i.test(desc)) {
-      setNativeValue(input, profile.personal.address);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.address);
     }
     // City
     else if (/city|town|municipality/i.test(desc)) {
-      setNativeValue(input, profile.personal.city);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.city);
     }
     // State / Province
     else if (/state|province|region/i.test(desc)) {
-      setNativeValue(input, profile.personal.state);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.state);
     }
     // Zip / Postal code
     else if (/zip|postal|post[\s_-]?code/i.test(desc)) {
-      setNativeValue(input, profile.personal.zipCode);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.zipCode);
     }
     // Country
     else if (/country/i.test(desc)) {
-      setNativeValue(input, profile.personal.country);
-      matched = true;
+      matched = setNativeValue(input, profile.personal?.country);
     }
     // Current Job Title
     else if (/current[\s_-]?title|job[\s_-]?title|headline|role/i.test(desc) && !/company/i.test(desc)) {
-      setNativeValue(input, profile.work.currentTitle);
-      matched = true;
+      matched = setNativeValue(input, profile.work?.currentTitle);
     }
     // Current Company
     else if (/current[\s_-]?company|employer|most[\s_-]?recent[\s_-]?company/i.test(desc)) {
-      setNativeValue(input, profile.work.currentCompany);
-      matched = true;
+      matched = setNativeValue(input, profile.work?.currentCompany);
     }
     // Years of Experience
     else if (/years[\s_-]?(of)?[\s_-]?exp|total[\s_-]?experience/i.test(desc)) {
-      setNativeValue(input, profile.work.yearsExperience);
-      matched = true;
+      matched = setNativeValue(input, profile.work?.yearsExperience);
     }
     // Salary Expectations
     else if (/salary|compensation|desired[\s_-]?pay|expected[\s_-]?rate/i.test(desc)) {
-      setNativeValue(input, profile.work.salaryExpectations);
-      matched = true;
+      matched = setNativeValue(input, profile.work?.salaryExpectations);
     }
     // Notice Period
     else if (/notice[\s_-]?period|start[\s_-]?date|availability/i.test(desc)) {
-      setNativeValue(input, profile.work.noticePeriod);
-      matched = true;
+      matched = setNativeValue(input, profile.work?.noticePeriod);
     }
     // Education / School
     else if (/school|university|college|institution/i.test(desc)) {
-      setNativeValue(input, profile.education.school);
-      matched = true;
+      matched = setNativeValue(input, profile.education?.school);
     }
     // Degree
     else if (/degree|education[\s_-]?level/i.test(desc)) {
-      setNativeValue(input, profile.education.degree);
-      matched = true;
+      matched = setNativeValue(input, profile.education?.degree);
     }
     // Field of Study / Major
     else if (/major|field[\s_-]?of[\s_-]?study|discipline/i.test(desc)) {
-      setNativeValue(input, profile.education.fieldOfStudy);
-      matched = true;
+      matched = setNativeValue(input, profile.education?.fieldOfStudy);
     }
     // Work Authorization Radios/Selects
     else if (/legally[\s_-]?authorized|authorized[\s_-]?to[\s_-]?work/i.test(desc)) {
@@ -246,10 +244,7 @@ export function autofillForm(profile: UserProfile): AutofillResult {
     }
     // Work Location / Remote Preference
     else if (/remote|hybrid|work[\s_-]?location|workplace[\s_-]?type/i.test(desc)) {
-      if (profile.work?.workLocationPreference) {
-        setNativeValue(input, profile.work.workLocationPreference);
-        matched = true;
-      }
+      matched = setNativeValue(input, profile.work?.workLocationPreference);
     }
     // Relocation
     else if (/willing[\s_-]?to[\s_-]?relocate|relocat/i.test(desc)) {
@@ -264,9 +259,8 @@ export function autofillForm(profile: UserProfile): AutofillResult {
             break;
           }
         }
-      } else if (profile.work?.willingToRelocate) {
-        setNativeValue(input, profile.work.willingToRelocate);
-        matched = true;
+      } else {
+        matched = setNativeValue(input, profile.work?.willingToRelocate);
       }
     }
     // Gender / EEO
@@ -327,14 +321,27 @@ export function autofillForm(profile: UserProfile): AutofillResult {
         }
       }
     }
-    // Custom Answers Check
+    // Password (if saved in custom answers)
+    else if (((input as HTMLInputElement).type === 'password' || /password|passwd|pwd/i.test(desc)) && profile.customAnswers?.['password']) {
+      matched = setNativeValue(input, profile.customAnswers['password']);
+    }
+    // Custom Field & Missing Input Check (Fuzzy keyword and phrase matching)
     else if (profile.customAnswers) {
       for (const [key, value] of Object.entries(profile.customAnswers)) {
+        if (!value) continue;
         const cleanKey = key.replace(/_/g, ' ').toLowerCase();
-        if (cleanKey.length > 2 && desc.includes(cleanKey)) {
-          setNativeValue(input, value);
-          matched = true;
-          break;
+        const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normalizedDesc = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const keyWords = cleanKey.split(/\s+/).filter(w => w.length > 2);
+
+        const wordMatch = keyWords.length > 0 && keyWords.every(w => desc.includes(w));
+        const substrMatch = (cleanKey.length >= 3 && desc.includes(cleanKey)) || (normalizedKey.length >= 3 && normalizedDesc.includes(normalizedKey));
+
+        if (wordMatch || substrMatch) {
+          if (setNativeValue(input, value)) {
+            matched = true;
+            break;
+          }
         }
       }
     }

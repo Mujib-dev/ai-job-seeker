@@ -338,6 +338,23 @@ function injectFloatingWidget() {
 
     try {
       const profile = await getUserProfile();
+
+      // Check if profile has any saved details
+      const hasAnyData = Boolean(
+        profile.personal?.email?.trim() ||
+        profile.personal?.firstName?.trim() ||
+        profile.personal?.lastName?.trim() ||
+        profile.personal?.phone?.trim()
+      );
+
+      if (!hasAnyData) {
+        showWidgetToast(container, '⚠️ Profile is empty! Click the extension icon to save your details first.');
+        btn.style.opacity = '1';
+        btn.innerHTML = `<span>Set Profile First</span>`;
+        setTimeout(resetBtn, 3000);
+        return;
+      }
+
       const sub = await getUserSubscription();
       const limit = sub.monthlyLimit || 50;
       const count = sub.monthlyUsageCount || 0;
@@ -376,8 +393,19 @@ function injectFloatingWidget() {
       setTimeout(resetBtn, 2500);
     } catch (err: any) {
       console.error('AI Job Seeker Autofill error:', err);
-      showWidgetToast(container, '⚠️ Autofill finished with best-effort matching.');
-      setTimeout(resetBtn, 1500);
+      const isContextInvalid =
+        err?.message?.toLowerCase().includes('invalidat') ||
+        err?.message?.toLowerCase().includes('context') ||
+        (typeof chrome !== 'undefined' && !chrome.runtime?.id);
+
+      if (isContextInvalid) {
+        btn.style.opacity = '1';
+        btn.innerHTML = `<span>Please Refresh Page</span>`;
+        showWidgetToast(container, '⚠️ Extension was updated. Please refresh (F5) this page.');
+      } else {
+        showWidgetToast(container, '⚠️ Autofill finished with best-effort matching.');
+      }
+      setTimeout(resetBtn, 2500);
     }
   });
 

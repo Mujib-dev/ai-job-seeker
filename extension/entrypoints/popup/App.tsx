@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   ExternalLink,
   Plus,
+  PlusCircle,
   Crown,
   Check,
   X,
@@ -63,7 +64,7 @@ const PROFILE_CATEGORIES = [
   { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'eeo', label: 'Demographics', icon: ShieldCheck },
   { id: 'skills', label: 'Skills', icon: Zap },
-  { id: 'custom', label: 'Custom Q&A', icon: MessageSquare },
+  { id: 'custom', label: '+ Custom Fields', icon: PlusCircle },
 ] as const;
 
 export default function App() {
@@ -101,6 +102,8 @@ export default function App() {
   const [newCert, setNewCert] = useState('');
   const [customKeyInput, setCustomKeyInput] = useState('');
   const [customValInput, setCustomValInput] = useState('');
+  const [quickCustomKey, setQuickCustomKey] = useState('');
+  const [quickCustomVal, setQuickCustomVal] = useState('');
 
   // Payment & License Verification State
   const [licenseInput, setLicenseInput] = useState('');
@@ -234,9 +237,18 @@ export default function App() {
   };
 
   // Trigger 1-Click Form Autofill
-  const handleTriggerAutofill = async () => {
+  const handleTriggerAutofill = async (customProfileToUse?: UserProfile) => {
+    const profileToUse = customProfileToUse || profile;
+    const hasData = Boolean(
+      profileToUse.personal?.email?.trim() ||
+      profileToUse.personal?.firstName?.trim() ||
+      profileToUse.personal?.lastName?.trim() ||
+      profileToUse.personal?.phone?.trim() ||
+      (profileToUse.customAnswers && Object.keys(profileToUse.customAnswers).length > 0)
+    );
+
     // Check if profile is empty
-    if (!profile.personal?.firstName && !profile.personal?.email) {
+    if (!hasData) {
       showToast('Please enter your profile details first!');
       setActiveTab('profile');
       return;
@@ -255,7 +267,7 @@ export default function App() {
         const tab = tabs[0];
         if (tab && tab.id) {
           // Attempt 1: Send message to content script
-          chrome.tabs.sendMessage(tab.id, { type: 'EXECUTE_AUTOFILL', profile }, async (response) => {
+          chrome.tabs.sendMessage(tab.id, { type: 'EXECUTE_AUTOFILL', profile: profileToUse }, async (response) => {
             if (chrome.runtime.lastError || !response) {
               // Attempt 2: Direct Script Injection fallback (for newly opened tabs or file:// URLs)
               try {
@@ -263,7 +275,7 @@ export default function App() {
                   {
                     target: { tabId: tab.id! },
                     func: directAutofillScript,
-                    args: [profile],
+                    args: [profileToUse],
                   },
                   async (results) => {
                     setLoading(false);
@@ -429,6 +441,25 @@ export default function App() {
       setCustomValInput('');
       showToast('Custom field added!');
     }
+  };
+
+  const handleSaveAndAutofillCustom = async () => {
+    if (!quickCustomKey.trim() || !quickCustomVal.trim()) return;
+    const cleanKey = quickCustomKey.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const updated = {
+      ...profile,
+      customAnswers: {
+        ...(profile.customAnswers || {}),
+        [cleanKey]: quickCustomVal.trim(),
+      },
+    };
+    setProfile(updated);
+    await saveUserProfile(updated);
+    const savedLabel = quickCustomKey.trim();
+    setQuickCustomKey('');
+    setQuickCustomVal('');
+    showToast(`Saved "${savedLabel}"! Autofilling form...`);
+    handleTriggerAutofill(updated);
   };
 
   const handleRemoveCustomField = (key: string) => {
@@ -740,6 +771,62 @@ export default function App() {
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 <span>Fills fields safely using your saved profile</span>
               </div>
+            </div>
+
+            {/* Quick Missing / Custom Field Adder */}
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+                  <h4 className="text-xs font-semibold text-white">Missing a field on this page?</h4>
+                </div>
+                <span className="text-[10px] text-slate-500">Custom Input</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Add any unique question or input (e.g. Father's Name, Emergency Contact) to autofill it instantly.
+              </p>
+
+              {/* Quick Preset Chips */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                {["Father's Name", 'Passport Number', 'Driver License', 'Emergency Contact', 'Notice Period', 'Expected Salary'].map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => {
+                      setQuickCustomKey(preset);
+                      if (preset === 'Notice Period' && profile.work?.noticePeriod) setQuickCustomVal(profile.work.noticePeriod);
+                      else if (preset === 'Expected Salary' && profile.work?.salaryExpectations) setQuickCustomVal(profile.work.salaryExpectations);
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 border border-slate-700/60 transition whitespace-nowrap cursor-pointer"
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                <input
+                  type="text"
+                  value={quickCustomKey}
+                  onChange={(e) => setQuickCustomKey(e.target.value)}
+                  placeholder="Field Name (e.g. Father Name)"
+                  className="w-full text-xs p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <input
+                  type="text"
+                  value={quickCustomVal}
+                  onChange={(e) => setQuickCustomVal(e.target.value)}
+                  placeholder="Value to fill..."
+                  className="w-full text-xs p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveAndAutofillCustom}
+                disabled={!quickCustomKey.trim() || !quickCustomVal.trim()}
+                className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" /> Save & Autofill Field Now
+              </button>
             </div>
 
             {/* AI Custom Question Responder */}
@@ -1412,49 +1499,74 @@ export default function App() {
               </div>
             )}
 
-            {/* CATEGORY 7: CUSTOM Q&A */}
+            {/* CATEGORY 7: CUSTOM FIELDS & MISSING INPUTS */}
             {profileCategory === 'custom' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Custom Questions & Answers</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Custom Fields & Missing Inputs</span>
+                  <span className="text-[10px] text-slate-500">{Object.keys(profile.customAnswers || {}).length} saved</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Save missing application inputs (e.g. Father's Name, Driver's License, Emergency Contact) so they autofill automatically.
+                </p>
+
+                {/* Preset Chips */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                  {["Father's Name", "Mother's Name", 'Passport Number', 'Driver License', 'Emergency Contact', 'Notice Period', 'Expected Salary'].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        setCustomKeyInput(preset);
+                        if (preset === 'Notice Period' && profile.work?.noticePeriod) setCustomValInput(profile.work.noticePeriod);
+                        else if (preset === 'Expected Salary' && profile.work?.salaryExpectations) setCustomValInput(profile.work.salaryExpectations);
+                      }}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 border border-slate-700/60 transition whitespace-nowrap cursor-pointer"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
 
                 <div className="space-y-2 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
                   <input
                     type="text"
                     value={customKeyInput}
                     onChange={(e) => setCustomKeyInput(e.target.value)}
-                    placeholder="Question keyword (e.g. referral, why us)..."
+                    placeholder="Field name or question (e.g. Father's Name, emergency contact)..."
                     className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200"
                   />
                   <textarea
                     rows={2}
                     value={customValInput}
                     onChange={(e) => setCustomValInput(e.target.value)}
-                    placeholder="Your saved answer..."
+                    placeholder="Your saved answer or value to fill..."
                     className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-800 text-slate-200 resize-none"
                   />
                   <button
                     onClick={handleAddCustomField}
-                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                    disabled={!customKeyInput.trim() || !customValInput.trim()}
+                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition shadow-sm"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Custom Answer
+                    <Plus className="w-3.5 h-3.5" /> Add Custom Field
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-36 overflow-y-auto pt-1">
+                <div className="space-y-2 max-h-44 overflow-y-auto pt-1">
                   {Object.keys(profile.customAnswers || {}).length === 0 ? (
                     <p className="text-[11px] text-slate-500 italic text-center py-2">
-                      No custom answers yet. Add common application questions above!
+                      No custom fields added yet. Add common application questions or missing inputs above!
                     </p>
                   ) : (
                     Object.entries(profile.customAnswers || {}).map(([key, val]) => (
-                      <div key={key} className="p-2 rounded bg-slate-950 border border-slate-800/80 text-xs flex justify-between gap-2">
+                      <div key={key} className="p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-xs flex justify-between gap-2 items-center">
                         <div className="overflow-hidden">
-                          <span className="font-semibold text-indigo-400 block truncate">{key.replace(/_/g, ' ')}</span>
+                          <span className="font-semibold text-indigo-400 block truncate capitalize">{key.replace(/_/g, ' ')}</span>
                           <p className="text-slate-300 text-[11px] line-clamp-2">{val}</p>
                         </div>
                         <button
                           onClick={() => handleRemoveCustomField(key)}
                           className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0 cursor-pointer"
+                          title="Remove custom field"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -2239,21 +2351,32 @@ export default function App() {
 
 // Direct injection function executed inside the webpage by chrome.scripting
 function directAutofillScript(profile: any): number {
-  function setVal(el: any, val: string) {
-    if (!val) return;
+  function setVal(el: any, val: any): boolean {
+    if (!val || typeof val !== 'string' || !val.trim()) return false;
+    const trimmed = val.trim();
+
+    // 1. Reset React 16+ internal valueTracker
+    if (el._valueTracker) {
+      el._valueTracker.setValue('');
+    }
+
+    // 2. Prototype property descriptor setter
     const valSetter = Object.getOwnPropertyDescriptor(el, 'value')?.set;
     const proto = Object.getPrototypeOf(el);
     const protoValSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
     if (protoValSetter && valSetter !== protoValSetter) {
-      protoValSetter.call(el, val);
+      protoValSetter.call(el, trimmed);
     } else if (valSetter) {
-      valSetter.call(el, val);
+      valSetter.call(el, trimmed);
     } else {
-      el.value = val;
+      el.value = trimmed;
     }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur', { bubbles: true }));
+
+    // 3. Dispatch events
+    el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    return true;
   }
 
   function getDesc(el: HTMLElement): string {
@@ -2261,9 +2384,11 @@ function directAutofillScript(profile: any): number {
       el.id || '',
       el.getAttribute('name') || '',
       el.getAttribute('placeholder') || '',
+      el.getAttribute('type') || '',
       el.getAttribute('aria-label') || '',
       el.getAttribute('autocomplete') || '',
       el.getAttribute('title') || '',
+      el.getAttribute('data-testid') || '',
     ];
     if (el.id) {
       const lbl = document.querySelector(`label[for="${el.id}"]`);
@@ -2274,7 +2399,7 @@ function directAutofillScript(profile: any): number {
 
     let prev = el.previousElementSibling;
     while (prev) {
-      if (prev.tagName.toLowerCase() === 'label' || prev.className.includes('label')) {
+      if (prev.tagName.toLowerCase() === 'label' || (prev as any).className?.includes?.('label')) {
         parts.push(prev.textContent?.trim() || '');
         break;
       }
@@ -2305,6 +2430,10 @@ function directAutofillScript(profile: any): number {
   let count = 0;
 
   for (const input of inputs) {
+    if (input.value && input.value.trim().length > 0 && input.type !== 'radio' && input.type !== 'checkbox') {
+      continue;
+    }
+
     const desc = getDesc(input);
     let matched = false;
 
@@ -2314,112 +2443,94 @@ function directAutofillScript(profile: any): number {
       if ((input as HTMLInputElement).maxLength === 11 || /03\d{2}/.test(desc)) {
         phoneVal = phoneVal.replace(/^\+92\s?/, '0').replace(/\s+/g, '');
       }
-      setVal(input, phoneVal);
-      matched = true;
+      matched = setVal(input, phoneVal);
     }
     // Email (Strictly exclude mobile/phone)
-    else if (/e[\s_-]?mail|email[\s_-]?address/i.test(desc) && !/phone|mobile|tel|cell/i.test(desc)) {
-      setVal(input, profile.personal?.email);
-      matched = true;
+    else if ((/e[\s_-]?mail|email[\s_-]?address/i.test(desc) || (input as HTMLInputElement).type === 'email') && !/phone|mobile|tel|cell/i.test(desc)) {
+      matched = setVal(input, profile.personal?.email);
     }
     // User ID / CNIC / NICOP / Afghan Refugee / National ID
     else if (/cnic|nicop|afghan[\s_-]?refugee|por(?!\w)|national[\s_-]?id|identity[\s_-]?card|user[\s_-]?id/i.test(desc)) {
-      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '17301-1234567-1';
-      if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc)) {
-        idVal = idVal.replace(/\D/g, '');
+      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '';
+      if (idVal) {
+        if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc)) {
+          idVal = idVal.replace(/\D/g, '');
+        }
+        matched = setVal(input, idVal);
       }
-      setVal(input, idVal);
-      matched = true;
     }
     // First Name
     else if (/first[\s_-]?name|given[\s_-]?name|fname/i.test(desc) && !/last|full|sur/i.test(desc)) {
-      setVal(input, profile.personal?.firstName);
-      matched = true;
+      matched = setVal(input, profile.personal?.firstName);
     }
     // Last Name
     else if (/last[\s_-]?name|family[\s_-]?name|surname|lname/i.test(desc) && !/first/i.test(desc)) {
-      setVal(input, profile.personal?.lastName);
-      matched = true;
+      matched = setVal(input, profile.personal?.lastName);
     }
     // Full Name
     else if (/full[\s_-]?name|^name$|candidate[\s_-]?name/i.test(desc) && !/first|last|company|school/i.test(desc)) {
-      setVal(input, `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim());
-      matched = true;
+      const fullName = `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim();
+      matched = setVal(input, fullName);
     }
     // LinkedIn
     else if (/linkedin/i.test(desc)) {
-      setVal(input, profile.personal?.linkedIn);
-      matched = true;
+      matched = setVal(input, profile.personal?.linkedIn);
     }
     // GitHub
     else if (/github/i.test(desc)) {
-      setVal(input, profile.personal?.github);
-      matched = true;
+      matched = setVal(input, profile.personal?.github);
     }
     // Portfolio / Website
     else if (/portfolio|website|personal[\s_-]?site|blog/i.test(desc)) {
-      setVal(input, profile.personal?.portfolio);
-      matched = true;
+      matched = setVal(input, profile.personal?.portfolio);
     }
     // Street Address
     else if (/street|address[\s_-]?line[\s_-]?1|address$/i.test(desc) && !/email/i.test(desc)) {
-      setVal(input, profile.personal?.address);
-      matched = true;
+      matched = setVal(input, profile.personal?.address);
     }
     // City
     else if (/city|town/i.test(desc)) {
-      setVal(input, profile.personal?.city);
-      matched = true;
+      matched = setVal(input, profile.personal?.city);
     }
     // State
     else if (/state|province|region/i.test(desc)) {
-      setVal(input, profile.personal?.state);
-      matched = true;
+      matched = setVal(input, profile.personal?.state);
     }
     // Zip
     else if (/zip|postal|post[\s_-]?code/i.test(desc)) {
-      setVal(input, profile.personal?.zipCode);
-      matched = true;
+      matched = setVal(input, profile.personal?.zipCode);
     }
     // Country
     else if (/country/i.test(desc)) {
-      setVal(input, profile.personal?.country);
-      matched = true;
+      matched = setVal(input, profile.personal?.country);
     }
     // Current Job Title
     else if (/current[\s_-]?title|job[\s_-]?title|role/i.test(desc) && !/company/i.test(desc)) {
-      setVal(input, profile.work?.currentTitle);
-      matched = true;
+      matched = setVal(input, profile.work?.currentTitle);
     }
     // Current Company
     else if (/current[\s_-]?company|employer/i.test(desc)) {
-      setVal(input, profile.work?.currentCompany);
-      matched = true;
+      matched = setVal(input, profile.work?.currentCompany);
     }
     // Years of Experience
     else if (/years[\s_-]?(of)?[\s_-]?exp|total[\s_-]?experience/i.test(desc)) {
-      setVal(input, profile.work?.yearsExperience);
-      matched = true;
+      matched = setVal(input, profile.work?.yearsExperience);
     }
     // Salary
     else if (/salary|compensation|desired[\s_-]?pay/i.test(desc)) {
-      setVal(input, profile.work?.salaryExpectations);
-      matched = true;
+      matched = setVal(input, profile.work?.salaryExpectations);
     }
     // School
     else if (/school|university|college/i.test(desc)) {
-      setVal(input, profile.education?.school);
-      matched = true;
+      matched = setVal(input, profile.education?.school);
     }
     // Degree
     else if (/degree|education[\s_-]?level/i.test(desc)) {
-      setVal(input, profile.education?.degree);
-      matched = true;
+      matched = setVal(input, profile.education?.degree);
     }
     // Major
     else if (/major|field[\s_-]?of[\s_-]?study/i.test(desc)) {
-      setVal(input, profile.education?.fieldOfStudy);
-      matched = true;
+      matched = setVal(input, profile.education?.fieldOfStudy);
     }
     // Work Authorization Selects
     else if (/legally[\s_-]?authorized|authorized[\s_-]?to[\s_-]?work/i.test(desc)) {
@@ -2449,14 +2560,27 @@ function directAutofillScript(profile: any): number {
         }
       }
     }
-    // Custom Saved Answers
+    // Password (if saved in custom answers)
+    else if (((input as HTMLInputElement).type === 'password' || /password|passwd|pwd/i.test(desc)) && profile.customAnswers?.['password']) {
+      matched = setVal(input, profile.customAnswers['password']);
+    }
+    // Custom Field & Missing Input Check (Fuzzy keyword and phrase matching)
     else if (profile.customAnswers) {
       for (const [key, value] of Object.entries(profile.customAnswers)) {
+        if (!value) continue;
         const cleanKey = key.replace(/_/g, ' ').toLowerCase();
-        if (cleanKey.length > 2 && desc.includes(cleanKey)) {
-          setVal(input, value as string);
-          matched = true;
-          break;
+        const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normalizedDesc = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const keyWords = cleanKey.split(/\s+/).filter(w => w.length > 2);
+
+        const wordMatch = keyWords.length > 0 && keyWords.every(w => desc.includes(w));
+        const substrMatch = (cleanKey.length >= 3 && desc.includes(cleanKey)) || (normalizedKey.length >= 3 && normalizedDesc.includes(normalizedKey));
+
+        if (wordMatch || substrMatch) {
+          if (setVal(input, value as string)) {
+            matched = true;
+            break;
+          }
         }
       }
     }
