@@ -5,7 +5,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'AI Job Seeker by LynkZone - 1-Click Form Autofill & AI Copilot',
-    description: '1-click job application form autofill, tailored AI question responses, and cover letter copilot by LynkZone.',
+    description: '1-click job application autofill for Workday, Greenhouse & LinkedIn. AI interview answers & tailored cover letter copilot.',
     version: '1.1.4',
     author: 'LynkZone',
     permissions: ['storage', 'activeTab', 'scripting'],

@@ -3,7 +3,7 @@
   "version": "1.1.4",
   "type": "module",
   "private": true,
-  "description": "Chrome Extension for 1-Click AI Job Auto-Fill & Tailored Application Responses",
+  "description": "1-click job application autofill for Workday, Greenhouse & LinkedIn. AI interview answers & tailored cover letter copilot.",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
