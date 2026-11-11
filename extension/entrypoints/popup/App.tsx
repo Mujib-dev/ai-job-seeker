@@ -68,34 +68,28 @@ const PROFILE_CATEGORIES = [
 ] as const;
 
 export function checkHasAnyInput(p: UserProfile): boolean {
-  return Boolean(
-    p.personal?.firstName?.trim() ||
-    p.personal?.lastName?.trim() ||
-    p.personal?.email?.trim() ||
-    p.personal?.phone?.trim() ||
-    p.personal?.cnic?.trim() ||
-    p.personal?.address?.trim() ||
-    p.personal?.city?.trim() ||
-    p.personal?.state?.trim() ||
-    p.personal?.zipCode?.trim() ||
-    p.personal?.country?.trim() ||
-    p.personal?.linkedIn?.trim() ||
-    p.personal?.github?.trim() ||
-    p.personal?.portfolio?.trim() ||
-    p.personal?.twitter?.trim() ||
-    p.work?.currentTitle?.trim() ||
-    p.work?.currentCompany?.trim() ||
-    p.work?.yearsExperience?.trim() ||
-    p.work?.salaryExpectations?.trim() ||
-    p.work?.noticePeriod?.trim() ||
-    p.education?.school?.trim() ||
-    p.education?.degree?.trim() ||
-    p.education?.fieldOfStudy?.trim() ||
-    (p.skills && p.skills.length > 0) ||
-    (p.certifications && p.certifications.length > 0) ||
-    (p.customAnswers && Object.values(p.customAnswers).some((v) => Boolean(v?.trim()))) ||
-    (p.sectionCustomFields && Object.values(p.sectionCustomFields).some((arr) => arr?.some?.((f) => Boolean(f?.value?.trim()))))
-  );
+  if (!p) return false;
+  if (p.personal) {
+    for (const val of Object.values(p.personal)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.work) {
+    for (const val of Object.values(p.work)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.education) {
+    for (const val of Object.values(p.education)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.skills && p.skills.length > 0) return true;
+  if (p.certifications && p.certifications.length > 0) return true;
+  if (p.customAnswers && Object.values(p.customAnswers).some((v) => Boolean(v?.trim()))) return true;
+  if (p.sectionCustomFields && Object.values(p.sectionCustomFields).some((arr) => arr?.some?.((f) => Boolean(f?.value?.trim())))) return true;
+
+  return false;
 }
 
 export default function App() {
@@ -116,6 +110,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [dismissedEmptyWarning, setDismissedEmptyWarning] = useState(false);
+  const [hasEnteredAnyData, setHasEnteredAnyData] = useState(false);
 
   // Active page detection state
   const [pageInfo, setPageInfo] = useState({ title: '', company: '', url: '', description: '' });
@@ -172,6 +167,16 @@ export default function App() {
           if (!checkHasAnyInput(p)) {
             setActiveTab('profile');
           }
+        }
+      }
+    } catch {}
+
+    // Check if user has entered data previously
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        const enteredRes = await chrome.storage.local.get('ai_job_seeker_has_entered_data');
+        if (enteredRes.ai_job_seeker_has_entered_data) {
+          setHasEnteredAnyData(true);
         }
       }
     } catch {}
@@ -278,12 +283,6 @@ export default function App() {
   // Trigger 1-Click Form Autofill
   const handleTriggerAutofill = async (customProfileToUse?: UserProfile) => {
     const profileToUse = customProfileToUse || profile;
-    const hasData = checkHasAnyInput(profileToUse);
-
-    // If profile is completely empty, show a gentle tip but NEVER redirect away from Autofill!
-    if (!hasData) {
-      showToast('Tip: Profile is empty. Fill your details in Profile tab when ready.');
-    }
 
     const freeLimit = subscription.monthlyLimit || 50;
     const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
@@ -422,7 +421,17 @@ export default function App() {
   };
 
   // Auto-save helpers so typed details are immediately persisted to storage without losing any work
+  const markDataEntered = () => {
+    setHasEnteredAnyData(true);
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ ai_job_seeker_has_entered_data: true });
+      }
+    } catch {}
+  };
+
   const updatePersonal = (field: keyof UserProfile['personal'], value: string) => {
+    markDataEntered();
     const updated = {
       ...profile,
       personal: {
@@ -435,6 +444,7 @@ export default function App() {
   };
 
   const updateWork = (field: keyof UserProfile['work'], value: string) => {
+    markDataEntered();
     const updated = {
       ...profile,
       work: {
@@ -447,6 +457,7 @@ export default function App() {
   };
 
   const updateEducation = (field: keyof UserProfile['education'], value: string) => {
+    markDataEntered();
     const updated = {
       ...profile,
       education: {
@@ -459,6 +470,7 @@ export default function App() {
   };
 
   const updateEEO = (field: keyof UserProfile['eeo'], value: string) => {
+    markDataEntered();
     const updated = {
       ...profile,
       eeo: {
@@ -471,6 +483,7 @@ export default function App() {
   };
 
   const updateAuth = (field: keyof UserProfile['authorization'], value: any) => {
+    markDataEntered();
     const updated = {
       ...profile,
       authorization: {
@@ -514,6 +527,7 @@ export default function App() {
 
   // When user clicks Save Profile: saves immediately AND triggers autofill on active tab right then!
   const handleSaveProfile = async () => {
+    markDataEntered();
     try {
       await saveUserProfile(profile);
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -776,7 +790,7 @@ export default function App() {
   const freeLimit = subscription.monthlyLimit || 50;
   const currentUsage = subscription.monthlyUsageCount ?? subscription.dailyUsageCount ?? 0;
   const remainingQuota = Math.max(0, freeLimit - currentUsage);
-  const hasUpdatedAnyInput = checkHasAnyInput(profile);
+  const hasUpdatedAnyInput = hasEnteredAnyData || checkHasAnyInput(profile);
 
   return (
     <div className={`flex flex-col h-[600px] w-[480px] select-none ${theme === 'light' ? 'theme-light' : 'bg-[#0b0f19] text-slate-100'}`}>
