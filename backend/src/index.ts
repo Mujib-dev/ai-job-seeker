@@ -46,46 +46,237 @@ app.get('/privacy', (c) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Privacy Policy - AI Job Seeker by LynkZone</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 40px 20px; line-height: 1.6; }
-    .container { max-width: 760px; margin: 0 auto; background: #1e293b; padding: 36px; border-radius: 16px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
-    h1 { color: #38bdf8; margin-top: 0; font-size: 26px; }
-    h3 { color: #818cf8; margin-top: 24px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0b0f19;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 40px 20px;
+      line-height: 1.7;
+    }
+    .container {
+      max-width: 840px;
+      margin: 0 auto;
+      background: #0f172a;
+      padding: 44px;
+      border-radius: 18px;
+      border: 1px solid #1e293b;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(14, 165, 233, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    h1 { color: #ffffff; margin-top: 0; font-size: 28px; font-weight: 800; }
+    h2 { color: #38bdf8; font-size: 20px; margin-top: 36px; margin-bottom: 12px; border-bottom: 1px solid #1e293b; padding-bottom: 8px; }
+    h3 { color: #818cf8; font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
     p, li { color: #cbd5e1; font-size: 14px; }
-    ul { padding-left: 20px; }
-    .badge { display: inline-block; background: #0284c7; color: white; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #334155; font-size: 13px; color: #94a3b8; }
+    ul, ol { padding-left: 24px; margin-top: 8px; margin-bottom: 16px; }
+    li { margin-bottom: 6px; }
+    strong { color: #ffffff; }
+    code { background: #0b0f19; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #38bdf8; font-size: 13px; border: 1px solid #1e293b; }
+    .table-wrapper { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    th { background: #1e293b; color: #38bdf8; padding: 12px; border: 1px solid #334155; }
+    td { padding: 12px; border: 1px solid #334155; color: #cbd5e1; vertical-align: top; }
+    tr:nth-child(even) { background: rgba(30, 41, 59, 0.4); }
+    .highlight-box {
+      background: rgba(99, 102, 241, 0.1);
+      border-left: 4px solid #6366f1;
+      padding: 16px 20px;
+      border-radius: 0 12px 12px 0;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 44px;
+      padding-top: 24px;
+      border-top: 1px solid #1e293b;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="badge">Official Privacy Policy</div>
-    <h1>AI Job Seeker by LynkZone</h1>
-    <p><strong>Last Updated:</strong> November 2026 | <strong>Developer:</strong> LynkZone</p>
-    
-    <p>AI Job Seeker by LynkZone ("the Extension") respects and protects your privacy. This policy outlines how information is handled when using the Chrome extension.</p>
-    
-    <h3>1. Local-First Architecture & Data Collection</h3>
-    <p>All personal profile details (including name, email, phone number, employment history, and education) are stored <strong>strictly locally on your personal device</strong> using Chrome's secure storage API (<code>chrome.storage.local</code>).</p>
+    <div class="badge">Official Chrome Web Store Privacy Policy</div>
+    <h1>Privacy Policy for AI Job Seeker by LynkZone</h1>
+    <p>
+      <strong>Product Name:</strong> AI Job Seeker by LynkZone - 1-Click Form Autofill & AI Copilot<br />
+      <strong>Extension ID:</strong> <code>ibphjhilkjffjihjendaklhhiofallgj</code><br />
+      <strong>Developer / Entity:</strong> LynkZone (Developer: Mujib Ur Rahman)<br />
+      <strong>Last Updated & Effective Date:</strong> November 11, 2026<br />
+      <strong>Contact Email:</strong> <a href="mailto:mujiburrahman.dev@gmail.com">mujiburrahman.dev@gmail.com</a> | <strong>WhatsApp Support:</strong> +92 348 1974606
+    </p>
+
+    <div class="highlight-box">
+      <strong>Core Purpose & Commitment:</strong> AI Job Seeker by LynkZone is designed to assist job seekers with a single primary function: efficiently automating repetitive form-filling on job application web pages and providing optional AI-powered assistance for job questions and cover letters. We believe your career information is deeply personal. <strong>We do not sell, rent, monetize, trade, or transfer your personal data to any third-party brokers, advertisers, or marketers.</strong>
+    </div>
+
+    <!-- SECTION 1 -->
+    <h2>1. User Data Collection (What We Collect and How We Collect It)</h2>
+    <p>We believe in data minimization. The Extension only collects information that is directly necessary to execute form autofilling, provide tailored career AI suggestions, and manage your usage quotas. All personal information collected is provided directly by you.</p>
+
+    <h3>A. Categories of Collected Data</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Data Category</th>
+            <th>Specific Data Fields</th>
+            <th>Collection Method</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Personal Identification Information (PII)</strong></td>
+            <td>First name, last name, email address, phone/mobile number, physical street address, city, state/province, postal/ZIP code, country, and optional national identity/CNIC credentials for regional job portals.</td>
+            <td>Entered manually by the user into the Extension's Profile settings. Never collected automatically without user input.</td>
+          </tr>
+          <tr>
+            <td><strong>Professional & Employment Profile</strong></td>
+            <td>Current job title, current company/employer, total years of experience, salary expectations, notice period, work authorization status, visa sponsorship requirements, remote/hybrid preference, LinkedIn profile URL, GitHub URL, portfolio URL, and Twitter handle.</td>
+            <td>Entered manually by the user into the Extension's Profile tabs.</td>
+          </tr>
+          <tr>
+            <td><strong>Educational Background</strong></td>
+            <td>School/University name, degree/qualification obtained, field of study/major, skills list, and professional certifications.</td>
+            <td>Entered manually by the user into the Extension's Profile tabs.</td>
+          </tr>
+          <tr>
+            <td><strong>Website Content & Form Fields (DOM Data)</strong></td>
+            <td>HTML input, textarea, and select element identifiers (such as ID, name, placeholder, label text, and autocomplete attributes), current page title, and URL of the active job application tab.</td>
+            <td>Inspected temporarily in browser memory <em>strictly</em> when the user explicitly clicks the "Autofill" button or floating widget on an active webpage.</td>
+          </tr>
+          <tr>
+            <td><strong>User-Generated Prompts & AI Content</strong></td>
+            <td>Application questionnaire prompts (e.g., "Why do you want to work here?"), job description excerpts, custom Q&A entries, and generated cover letter drafts.</td>
+            <td>Pasted or typed by the user into the Extension's AI Copilot input area.</td>
+          </tr>
+          <tr>
+            <td><strong>Usage & Subscription Status</strong></td>
+            <td>Monthly free application count (resets on the 1st of each month), timestamp of last usage, and Pro license key status.</td>
+            <td>Calculated and stored locally within the browser to manage the 50 free monthly application tier.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SECTION 2 -->
+    <h2>2. User Data Handling and Usage (How We Use Your Data)</h2>
+    <p>Every piece of collected data is used exclusively to deliver the Extension's stated features. Specifically, user data is handled in the following manners:</p>
     <ul>
-      <li><strong>No Selling of Data:</strong> LynkZone never sells, rents, monetizes, or shares your personal data or application history with third parties, brokers, or advertisers.</li>
-      <li><strong>No Tracking:</strong> We do not track your browsing activity across other websites.</li>
+      <li><strong>Form Autofill Execution:</strong> Your saved personal, employment, and education details are matched with standard form fields (name, email, phone, address, experience) on active job postings and populated into the page DOM when you click "Autofill".</li>
+      <li><strong>Custom AI Response & Cover Letter Generation:</strong> When you invoke the "Generate Answer" or "Generate Cover Letter" features, your prompt, relevant qualification bullet points, and job description excerpts are formatted into a prompt and submitted to Google Gemini API to generate professional, context-aware responses.</li>
+      <li><strong>Application Tracking:</strong> When an autofill operation succeeds, the job title, company name, URL, and application timestamp are logged to your local "Tracker" tab so you can monitor your job search pipeline.</li>
+      <li><strong>Quota & License Management:</strong> To provide 50 free monthly applications and enable optional Pro features without requiring accounts or logins.</li>
     </ul>
 
-    <h3>2. Permissions Justification</h3>
+    <!-- SECTION 3 -->
+    <h2>3. User Data Storage, Retention, and Security</h2>
+    <p>LynkZone is built on a <strong>local-first architecture</strong>:</p>
     <ul>
-      <li><strong><code>activeTab</code> & <code>scripting</code>:</strong> Required only when you explicitly click "Autofill" to inspect form input fields on the active job application tab and populate them with your saved profile.</li>
-      <li><strong><code>storage</code>:</strong> Used to save your job profile settings, custom answers, and application history locally on your device.</li>
-      <li><strong>Host Permissions:</strong> Allows the autofill helper script to work across different company hiring portals (such as Greenhouse, Lever, Workday, LinkedIn, and Indeed).</li>
+      <li><strong>Local Storage on Your Device:</strong> All your personal profile information, work history, education, skills, custom answers, and application tracking records are stored <strong>exclusively on your personal computer</strong> using Chrome's secure, sandboxed <code>chrome.storage.local</code> API.</li>
+      <li><strong>No Centralized Resume Database:</strong> LynkZone does not maintain an external cloud database of candidate profiles, resumes, addresses, or job applications. Your information does not live on our servers.</li>
+      <li><strong>Encryption in Transit:</strong> Whenever data is transmitted over the internet (such as sending a question prompt to the AI endpoint or verifying a Pro license key), it is encrypted using modern industry-standard <strong>HTTPS / TLS 1.3 protocols</strong>.</li>
+      <li><strong>Data Retention Period:</strong> Your data remains stored in your local browser sandbox indefinitely until you edit it, clear it, or uninstall the Extension. Uninstalling the Extension permanently and irreversibly deletes all stored profile data from your machine.</li>
     </ul>
 
-    <h3>3. AI Processing & Third-Party Services</h3>
-    <p>When using the AI Question Copilot or ATS Cover Letter generator, only the job description context and relevant prompt are processed securely via AI APIs to generate responses. Payment information is securely processed by Stripe or coordinated directly through official channels; payment card details are never handled or stored by the extension.</p>
+    <!-- SECTION 4 -->
+    <h2>4. User Data Sharing and Third-Party Disclosures</h2>
+    <div class="highlight-box">
+      <strong>Zero Sale of Data:</strong> LynkZone does NOT sell, rent, lease, trade, or share your personal data with third-party advertisers, data brokers, or marketing networks. User data is never used or transferred for purposes unrelated to job application form autofilling and career assistance. User data is never used for credit evaluation, lending, or advertising.
+    </div>
 
-    <h3>4. User Data Control</h3>
-    <p>You have full ownership of your data. You can edit, export, or permanently erase your profile and tracker history at any time from the Extension's Settings tab. Uninstalling the extension immediately purges all local storage.</p>
+    <p>To provide specific core functionality, the Extension communicates with the following strictly vetted third-party service providers. <strong>The following represents all parties that user data may be shared with:</strong></p>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Third-Party Provider</th>
+            <th>Data Shared with Provider</th>
+            <th>Purpose & Function</th>
+            <th>Privacy Policy & Security</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>Google LLC</strong><br />
+              <em>(Google Generative AI / Gemini API)</em><br />
+              Mountain View, CA, USA
+            </td>
+            <td>The specific application question prompt entered by the user, relevant skills summary, job title, and pasted job description excerpts.</td>
+            <td>Used solely to process and generate natural language answers to interview questions and ATS-friendly cover letter text in real time.</td>
+            <td>Data is processed via encrypted HTTPS. Under Google Cloud Enterprise API terms, user API inputs are not retained or used to train Google AI foundation models. <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Stripe, Inc.</strong><br />
+              San Francisco, CA, USA
+            </td>
+            <td>Customer email address and payment method details (card number, expiration, CVC).</td>
+            <td>Used strictly for processing optional Pro subscription and lifetime license payments if the user chooses to upgrade via card.</td>
+            <td>Payment processing occurs entirely on Stripe's PCI-DSS Level 1 certified servers. LynkZone never handles, views, or stores your credit card numbers. <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe Privacy Policy</a>.</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Render Services, Inc.</strong><br />
+              San Francisco, CA, USA
+            </td>
+            <td>Encrypted API request payloads in transit (AI question routing and license key verification strings).</td>
+            <td>Cloud infrastructure provider hosting the secure proxy backend and official LynkZone license verification service.</td>
+            <td>Data is encrypted in transit using TLS 1.3. Server logs are transient and do not persist personal profile data. <a href="https://render.com/privacy" target="_blank" rel="noopener">Render Privacy Policy</a>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>No other third parties:</strong> Except for the three service providers explicitly listed above, no third party has access to any user data.</p>
+
+    <!-- SECTION 5 -->
+    <h2>5. Chrome Permissions Justification & Least Privilege</h2>
+    <p>The Extension requests only the minimum set of permissions necessary to function:</p>
+    <ul>
+      <li><code>activeTab</code> and <code>scripting</code>: Required strictly to read form field selectors (such as inputs and labels) on the active webpage when you click "Autofill" and insert your pre-approved profile values. These permissions are inactive until you trigger an autofill action.</li>
+      <li><code>storage</code>: Required to persist your profile fields, custom inputs, tracker entries, and free monthly usage count locally on your browser.</li>
+      <li>Host Permissions (<code>https://*/*</code>, <code>http://*/*</code>, <code>file://*/*</code>): Job postings and application portals are hosted across thousands of independent domains (Greenhouse, Lever, Workday, Taleo, Ashby, SmartRecruiters, Jobvite, LinkedIn, Indeed, and university portals). Host access is required so the autofill content script can run on whichever job application site you navigate to.</li>
+    </ul>
+
+    <!-- SECTION 6 -->
+    <h2>6. User Rights, Data Control, and Deletion Procedures</h2>
+    <p>You have full and continuous sovereignty over all your data:</p>
+    <ul>
+      <li><strong>Access & Modify:</strong> You can view, edit, or update any field in your profile at any time directly in the Extension's "Profile" tab.</li>
+      <li><strong>Data Deletion:</strong> You can delete any saved information, custom field, or tracked application at any time.</li>
+      <li><strong>Complete Erasure:</strong> To purge 100% of your data instantly, you can uninstall the Extension from Chrome (Right-click icon > "Remove from Chrome") or clear extension storage in Chrome settings (<code>chrome://settings/content/all</code>).</li>
+      <li><strong>Direct Inquiries:</strong> You can email <a href="mailto:mujiburrahman.dev@gmail.com">mujiburrahman.dev@gmail.com</a> at any time to request assistance regarding your data privacy.</li>
+    </ul>
+
+    <!-- SECTION 7 -->
+    <h2>7. Developer Identity and Contact Information</h2>
+    <p>For any questions, concerns, verification, or feedback regarding this Privacy Policy, please contact the developer directly:</p>
+    <ul>
+      <li><strong>Developer Name:</strong> Mujib Ur Rahman</li>
+      <li><strong>Organization:</strong> LynkZone</li>
+      <li><strong>Developer Email:</strong> <a href="mailto:mujiburrahman.dev@gmail.com">mujiburrahman.dev@gmail.com</a></li>
+      <li><strong>WhatsApp / Phone:</strong> +92 348 1974606</li>
+      <li><strong>Location:</strong> Peshawar, Khyber Pakhtunkhwa, Pakistan</li>
+      <li><strong>Hosted Privacy Policy URL:</strong> <a href="https://ai-job-seeker-backend-jspe.onrender.com/privacy">https://ai-job-seeker-backend-jspe.onrender.com/privacy</a></li>
+    </ul>
 
     <div class="footer">
-      <strong>Contact:</strong> mujiburrahman.dev@gmail.com | <strong>WhatsApp:</strong> +92 348 1974606 | <strong>Organization:</strong> LynkZone
+      &copy; 2026 LynkZone. All rights reserved. | AI Job Seeker is committed to user data privacy, security, and full compliance with Google Chrome Web Store Program Policies.
     </div>
   </div>
 </body>

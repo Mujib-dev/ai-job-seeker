@@ -115,6 +115,7 @@ export default function App() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [dismissedEmptyWarning, setDismissedEmptyWarning] = useState(false);
 
   // Active page detection state
   const [pageInfo, setPageInfo] = useState({ title: '', company: '', url: '', description: '' });
@@ -162,13 +163,15 @@ export default function App() {
     const a = await getJobApplications();
     setApplications(a);
 
-    // Only redirect to Profile (personal) tab ONE TIME on first install ever!
+    // Only redirect to Profile tab ONE TIME on first install ever (if profile is fresh and empty)
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         const redirectRes = await chrome.storage.local.get('ai_job_seeker_has_redirected_to_profile');
         if (!redirectRes.ai_job_seeker_has_redirected_to_profile) {
           await chrome.storage.local.set({ ai_job_seeker_has_redirected_to_profile: true });
-          setActiveTab('profile');
+          if (!checkHasAnyInput(p)) {
+            setActiveTab('profile');
+          }
         }
       }
     } catch {}
@@ -277,11 +280,9 @@ export default function App() {
     const profileToUse = customProfileToUse || profile;
     const hasData = checkHasAnyInput(profileToUse);
 
-    // Check if profile is empty (guided prompt if user hasn't filled at least 1 input)
+    // If profile is completely empty, show a gentle tip but NEVER redirect away from Autofill!
     if (!hasData) {
-      showToast('Please add at least one detail in the Profile tab first!');
-      setActiveTab('profile');
-      return;
+      showToast('Tip: Profile is empty. Fill your details in Profile tab when ready.');
     }
 
     const freeLimit = subscription.monthlyLimit || 50;
@@ -790,11 +791,11 @@ export default function App() {
       {/* Sleek, Friendly Header */}
       <header className="px-4 py-3 border-b border-slate-800/80 bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <div className="w-full h-full bg-[#0b0f19] rounded-[7px] flex items-center justify-center">
-              <Briefcase className="w-4 h-4 text-cyan-400" />
-            </div>
-          </div>
+          <img
+            src="/icons/icon-48.png"
+            alt="AI Job Seeker Logo"
+            className="w-8 h-8 rounded-xl shadow-md shadow-indigo-500/25 ring-1 ring-white/10 object-cover flex-shrink-0"
+          />
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-sm tracking-tight text-white">AI Job Seeker</span>
@@ -990,23 +991,32 @@ export default function App() {
               </div>
             )}
 
-            {/* Empty Profile Warning Banner (Only shown if user has not updated ANY input yet) */}
-            {!hasUpdatedAnyInput && (
-              <div className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
-                isDark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-300'
+            {/* Empty Profile Notice (Dismissible so user is never annoyed) */}
+            {!hasUpdatedAnyInput && !dismissedEmptyWarning && (
+              <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                isDark ? 'bg-amber-500/10 border-amber-500/25' : 'bg-amber-50 border-amber-300'
               }`}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <p className={`text-xs ${isDark ? 'text-amber-200' : 'text-amber-800'}`}>
-                    Profile is empty. Please add your details in the Profile tab first.
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <p className={`text-[11px] ${isDark ? 'text-amber-200' : 'text-amber-800'}`}>
+                    Tip: Add details in Profile tab for 1-click autofill.
                   </p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[11px] font-semibold whitespace-nowrap cursor-pointer transition flex-shrink-0"
-                >
-                  Go to Profile →
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-semibold whitespace-nowrap cursor-pointer transition"
+                  >
+                    Go to Profile →
+                  </button>
+                  <button
+                    onClick={() => setDismissedEmptyWarning(true)}
+                    className="p-1 rounded text-amber-400/70 hover:text-amber-400 transition cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2236,16 +2246,57 @@ export default function App() {
                 <span>Chat on WhatsApp (+92 348 1974606)</span>
               </a>
             </div>
+
+            {/* Official Privacy & Data Security Policy Card */}
+            <div
+              className={`p-3.5 rounded-xl border space-y-2 ${
+                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <h4 className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Privacy & Data Security Policy</h4>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
+                  Compliant
+                </span>
+              </div>
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                100% transparent: Learn how your data is collected, handled, stored locally on your device, and shared only with Google Gemini & Stripe.
+              </p>
+              <a
+                href="https://ai-job-seeker-backend-jspe.onrender.com/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2 px-3 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition text-decoration-none cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Read Full Privacy Policy →</span>
+              </a>
+            </div>
           </div>
         )}
       </main>
 
-      {/* Clean, Minimal Footer */}
+      {/* Clean, Minimal Footer with In-Product Privacy Link */}
       <footer className="px-4 py-2 border-t border-slate-800/80 bg-[#090d16] text-[10px] text-slate-500 flex items-center justify-between">
-        <span>LynkZone • AI Job Seeker</span>
-        <span className="flex items-center gap-1 text-slate-400">
-          <ShieldCheck className="w-3 h-3 text-emerald-400" /> Private & Local Storage
-        </span>
+        <span>LynkZone • AI Job Seeker v1.1.4</span>
+        <div className="flex items-center gap-3">
+          <a
+            href="https://ai-job-seeker-backend-jspe.onrender.com/privacy"
+            target="_blank"
+            rel="noreferrer"
+            className="text-cyan-400 hover:underline flex items-center gap-1 font-medium"
+          >
+            <ShieldCheck className="w-3 h-3 text-cyan-400" />
+            <span>Privacy Policy</span>
+          </a>
+          <span className="flex items-center gap-1 text-slate-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+            <span>Private & Local</span>
+          </span>
+        </div>
       </footer>
 
       {/* ================= HOW IT WORKS QUICK GUIDE MODAL ================= */}
