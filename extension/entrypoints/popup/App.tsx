@@ -46,6 +46,7 @@ import {
 } from '../../lib/storage';
 import { generateAIAnswer, generateAICoverLetter } from '../../lib/ai';
 import { API_BASE_URL } from '../../lib/config';
+import { APP_ICON_BASE64 } from '../../lib/iconBase64';
 
 type Tab = 'autofill' | 'profile' | 'cover-letter' | 'tracker' | 'settings';
 
@@ -108,6 +109,9 @@ export default function App() {
   });
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(false);
+  const [autofillLoading, setAutofillLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [dismissedEmptyWarning, setDismissedEmptyWarning] = useState(false);
   const [hasEnteredAnyData, setHasEnteredAnyData] = useState(false);
@@ -282,6 +286,7 @@ export default function App() {
 
   // Trigger 1-Click Form Autofill
   const handleTriggerAutofill = async (customProfileToUse?: UserProfile) => {
+    if (autofillLoading) return; // Prevent double trigger
     const profileToUse = customProfileToUse || profile;
 
     const freeLimit = subscription.monthlyLimit || 50;
@@ -291,53 +296,111 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs[0];
-        if (tab && tab.id) {
-          // Attempt 1: Send message to content script
-          chrome.tabs.sendMessage(tab.id, { type: 'EXECUTE_AUTOFILL', profile: profileToUse }, async (response) => {
-            if (chrome.runtime.lastError || !response) {
-              // Attempt 2: Direct Script Injection fallback (for newly opened tabs or file:// URLs)
-              try {
+    setAutofillLoading(true);
+
+    let finished = false;
+    const finish = (filled: number, message?: string) => {
+      if (finished) return;
+      finished = true;
+      setAutofillLoading(false);
+      if (filled > 0) {
+        showToast(`✨ Autofilled ${filled} fields!`);
+        recordApplicationAndUsage();
+      } else if (message) {
+        showToast(message);
+      } else {
+        showToast('No matching empty fields found on this page.');
+      }
+    };
+
+    // Absolute hard safety timeout: button NEVER stays stuck longer than 2.2 seconds under any circumstances
+    const safetyTimer = setTimeout(() => {
+      finish(0, 'Autofill ready.');
+    }, 2200);
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const tab = tabs?.[0];
+          if (!tab || !tab.id) {
+            clearTimeout(safetyTimer);
+            finish(0, 'Please open a job webpage to autofill.');
+            return;
+          }
+
+          const tabId = tab.id;
+          const tabUrl = tab.url || '';
+
+          // Disallow internal browser URLs
+          if (tabUrl.startsWith('chrome://') || tabUrl.startsWith('edge://') || tabUrl.startsWith('chrome-extension://')) {
+            clearTimeout(safetyTimer);
+            finish(0, 'Cannot autofill on internal browser pages.');
+            return;
+          }
+
+          let msgAnswered = false;
+
+          // Helper to execute direct script injection fallback
+          const runDirectScript = () => {
+            if (msgAnswered) return;
+            msgAnswered = true;
+            try {
+              if (chrome.scripting && chrome.scripting.executeScript) {
                 chrome.scripting.executeScript(
                   {
-                    target: { tabId: tab.id! },
+                    target: { tabId },
                     func: directAutofillScript,
                     args: [profileToUse],
                   },
-                  async (results) => {
-                    setLoading(false);
-                    const filled = results?.[0]?.result ?? 0;
-                    if (filled > 0) {
-                      showToast(`Autofilled ${filled} fields!`);
-                      await recordApplicationAndUsage();
+                  (results) => {
+                    clearTimeout(safetyTimer);
+                    if (chrome.runtime.lastError) {
+                      finish(0, 'Please refresh the job page and click Autofill.');
                     } else {
-                      showToast('No empty application fields found on this page.');
+                      const count = results?.[0]?.result ?? 0;
+                      finish(count);
                     }
                   }
                 );
-              } catch (err: any) {
-                setLoading(false);
-                showToast('Please refresh the page and try again!');
-              }
-            } else {
-              setLoading(false);
-              const filled = response.filledCount ?? 0;
-              if (filled > 0) {
-                showToast(`Autofilled ${filled} fields!`);
-                await recordApplicationAndUsage();
               } else {
-                showToast('No empty application fields found on this page.');
+                clearTimeout(safetyTimer);
+                finish(0, 'Ready on active web pages.');
               }
+            } catch {
+              clearTimeout(safetyTimer);
+              finish(0, 'Please refresh the page and try again.');
             }
-          });
-        }
-      });
-    } else {
-      setLoading(false);
-      showToast('Autofill simulated (demo environment)');
+          };
+
+          // Attempt 1: sendMessage to content script
+          try {
+            chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: profileToUse }, (response) => {
+              if (chrome.runtime.lastError || !response || typeof response.filledCount !== 'number') {
+                runDirectScript();
+              } else {
+                msgAnswered = true;
+                clearTimeout(safetyTimer);
+                finish(response.filledCount);
+              }
+            });
+          } catch {
+            runDirectScript();
+          }
+
+          // Fallback timer: if content script sendMessage stalls > 600ms, immediately run direct script injection
+          setTimeout(() => {
+            if (!msgAnswered) {
+              runDirectScript();
+            }
+          }, 600);
+        });
+      } else {
+        clearTimeout(safetyTimer);
+        finish(0, 'Autofill simulated (demo environment)');
+      }
+    } catch {
+      clearTimeout(safetyTimer);
+      finish(0, 'Please refresh the page and try again.');
     }
   };
 
@@ -355,7 +418,7 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
+    setAiLoading(true);
     try {
       const ans = await generateAIAnswer({
         profile,
@@ -372,7 +435,7 @@ export default function App() {
     } catch {
       showToast('Error generating answer. Try again.');
     } finally {
-      setLoading(false);
+      setAiLoading(false);
     }
   };
 
@@ -385,7 +448,7 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
+    setCoverLoading(true);
     try {
       const letter = await generateAICoverLetter({
         profile,
@@ -400,7 +463,7 @@ export default function App() {
     } catch {
       showToast('Failed to generate cover letter.');
     } finally {
-      setLoading(false);
+      setCoverLoading(false);
     }
   };
 
@@ -806,7 +869,7 @@ export default function App() {
       <header className="px-4 py-3 border-b border-slate-800/80 bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <img
-            src="/icons/icon-48.png"
+            src={APP_ICON_BASE64}
             alt="AI Job Seeker Logo"
             className="w-8 h-8 rounded-xl shadow-md shadow-indigo-500/25 ring-1 ring-white/10 object-cover flex-shrink-0"
           />
@@ -1080,11 +1143,11 @@ export default function App() {
             <div className="space-y-1.5">
               <button
                 onClick={handleTriggerAutofill}
-                disabled={loading}
+                disabled={autofillLoading}
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
                 <Zap className="w-4 h-4 fill-white" />
-                {loading ? 'Autofilling Form...' : '1-Click Autofill Active Form'}
+                {autofillLoading ? 'Autofilling Form...' : '1-Click Autofill Active Form'}
               </button>
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
@@ -1137,11 +1200,11 @@ export default function App() {
 
               <button
                 onClick={handleGenerateAnswer}
-                disabled={loading || !customQuestion.trim()}
+                disabled={aiLoading || !customQuestion.trim()}
                 className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-md shadow-indigo-600/20"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                {loading ? 'Crafting answer...' : 'Generate Answer'}
+                {aiLoading ? 'Crafting answer...' : 'Generate Answer'}
               </button>
 
               {/* Generated Result Output */}
@@ -1856,11 +1919,11 @@ export default function App() {
               </div>
               <button
                 onClick={handleGenerateCoverLetter}
-                disabled={loading}
+                disabled={coverLoading}
                 className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                {loading ? 'Writing...' : 'Generate Letter'}
+                {coverLoading ? 'Writing...' : 'Generate Letter'}
               </button>
             </div>
 

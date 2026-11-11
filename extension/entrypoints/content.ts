@@ -1,6 +1,7 @@
 import { defineContentScript } from 'wxt/sandbox';
 import { autofillForm, extractPageJobContext } from '../lib/autofill';
-import { getUserProfile, incrementUsage, getUserSubscription } from '../lib/storage';
+import { getUserProfile, incrementUsage, getUserSubscription, hasAnyProfileData } from '../lib/storage';
+import { APP_ICON_BASE64 } from '../lib/iconBase64';
 
 export default defineContentScript({
   matches: ['*://*/*', 'file://*/*'],
@@ -9,27 +10,40 @@ export default defineContentScript({
     // 1. Listen for messages from Popup
     chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       if (request.type === 'GET_PAGE_JOB_INFO') {
-        const info = extractPageJobContext();
-        sendResponse(info);
-        return true;
+        try {
+          const info = extractPageJobContext();
+          sendResponse(info);
+        } catch {
+          sendResponse({ title: '', company: '', url: window.location.href, description: '' });
+        }
+        return false;
       }
 
       if (request.type === 'EXECUTE_AUTOFILL') {
-        const result = autofillForm(request.profile);
-        sendResponse({ filledCount: result.filledFieldsCount, total: result.totalFieldsFound });
-        return true;
+        try {
+          const result = autofillForm(request.profile);
+          sendResponse({ filledCount: result.filledFieldsCount, total: result.totalFieldsFound });
+        } catch (err: any) {
+          console.error('Autofill error:', err);
+          sendResponse({ filledCount: 0, error: err?.message });
+        }
+        return false;
       }
 
       if (request.type === 'SET_FLOATING_WIDGET_VISIBLE') {
-        const host = document.getElementById('ai-job-seeker-host');
-        if (request.enabled) {
-          if (!host) injectFloatingWidget();
-          else host.style.display = 'block';
-        } else {
-          if (host) host.style.display = 'none';
+        try {
+          const host = document.getElementById('ai-job-seeker-host');
+          if (request.enabled) {
+            if (!host) injectFloatingWidget();
+            else host.style.display = 'block';
+          } else {
+            if (host) host.style.display = 'none';
+          }
+          sendResponse({ success: true });
+        } catch {
+          sendResponse({ success: false });
         }
-        sendResponse({ success: true });
-        return true;
+        return false;
       }
     });
 
@@ -174,9 +188,7 @@ function injectFloatingWidget() {
         <circle cx="8" cy="14" r="1.5"></circle>
       </svg>
     </span>
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-    </svg>
+    <img src="${APP_ICON_BASE64}" style="width: 17px; height: 17px; border-radius: 4px; object-fit: cover; display: inline-block; vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" alt="AI Job Seeker" />
     <span>AI Autofill</span>
     <span class="badge">1-Click</span>
   `;
@@ -322,9 +334,7 @@ function injectFloatingWidget() {
           <circle cx="8" cy="14" r="1.5"></circle>
         </svg>
       </span>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-      </svg>
+      <img src="${APP_ICON_BASE64}" style="width: 17px; height: 17px; border-radius: 4px; object-fit: cover; display: inline-block; vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" alt="AI Job Seeker" />
       <span>AI Autofill</span>
       <span class="badge">1-Click</span>
     `;
@@ -339,19 +349,14 @@ function injectFloatingWidget() {
     try {
       const profile = await getUserProfile();
 
-      // Check if profile has any saved details
-      const hasAnyData = Boolean(
-        profile.personal?.email?.trim() ||
-        profile.personal?.firstName?.trim() ||
-        profile.personal?.lastName?.trim() ||
-        profile.personal?.phone?.trim()
-      );
+      // Check if profile has any saved details (filling even one input is enough)
+      const hasAnyData = hasAnyProfileData(profile);
 
       if (!hasAnyData) {
-        showWidgetToast(container, '⚠️ Profile is empty! Click the extension icon to save your details first.');
+        showWidgetToast(container, 'Tip: Add your details in Profile tab first.');
         btn.style.opacity = '1';
         btn.innerHTML = `<span>Set Profile First</span>`;
-        setTimeout(resetBtn, 3000);
+        setTimeout(resetBtn, 2000);
         return;
       }
 

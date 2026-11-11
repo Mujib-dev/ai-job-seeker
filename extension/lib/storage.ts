@@ -155,3 +155,38 @@ export async function setFloatingWidgetEnabled(enabled: boolean): Promise<void> 
     [STORAGE_KEYS.SETTINGS]: { ...current, showFloatingWidget: enabled },
   });
 }
+
+export function hasAnyProfileData(p?: UserProfile | null): boolean {
+  if (!p) return false;
+  if (p.personal) {
+    for (const val of Object.values(p.personal)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.work) {
+    for (const val of Object.values(p.work)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.education) {
+    for (const val of Object.values(p.education)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.authorization) {
+    for (const val of Object.values(p.authorization)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (p.eeo) {
+    for (const val of Object.values(p.eeo)) {
+      if (typeof val === 'string' && val.trim().length > 0) return true;
+    }
+  }
+  if (Array.isArray(p.skills) && p.skills.length > 0) return true;
+  if (Array.isArray(p.certifications) && p.certifications.length > 0) return true;
+  if (p.customAnswers && Object.values(p.customAnswers).some((v) => Boolean(v?.trim()))) return true;
+  if (p.sectionCustomFields && Object.values(p.sectionCustomFields).some((arr) => arr?.some?.((f) => Boolean(f?.value?.trim())))) return true;
+
+  return false;
+}

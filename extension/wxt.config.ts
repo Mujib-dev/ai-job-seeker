@@ -25,5 +25,11 @@ export default defineConfig({
         128: 'icons/icon-128.png',
       },
     },
+    web_accessible_resources: [
+      {
+        resources: ['icons/*.png'],
+        matches: ['<all_urls>'],
+      },
+    ],
   },
 });
