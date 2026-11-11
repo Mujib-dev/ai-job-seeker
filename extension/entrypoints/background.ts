@@ -31,5 +31,7 @@ export default defineBackground(() => {
       });
       return true;
     }
+
+    return false;
   });
 });

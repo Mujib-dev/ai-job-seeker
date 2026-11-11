@@ -1142,7 +1142,7 @@ export default function App() {
             {/* Primary Autofill Action Button */}
             <div className="space-y-1.5">
               <button
-                onClick={handleTriggerAutofill}
+                onClick={() => handleTriggerAutofill()}
                 disabled={autofillLoading}
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >

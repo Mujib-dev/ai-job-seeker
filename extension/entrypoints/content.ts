@@ -45,6 +45,8 @@ export default defineContentScript({
         }
         return false;
       }
+
+      return false;
     });
 
     // 2. Listen to storage changes so floating widget toggles on all open tabs in real time
