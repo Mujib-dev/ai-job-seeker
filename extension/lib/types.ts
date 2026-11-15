@@ -22,6 +22,7 @@ export interface UserProfile {
     email: string;
     phone: string;
     cnic?: string;
+    dob?: string;
     address: string;
     city: string;
     state: string;
@@ -96,6 +97,7 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     email: '',
     phone: '',
     cnic: '',
+    dob: '',
     address: '',
     city: '',
     state: '',

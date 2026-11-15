@@ -30,6 +30,7 @@ export function generateProfileExcelCsv(profile: UserProfile): string {
     ['Contact', 'Email Address', 'email', profile.personal.email || '', 'Professional contact email'],
     ['Contact', 'Phone Number', 'phone', profile.personal.phone || '', 'Mobile / WhatsApp phone number'],
     ['Contact', 'CNIC / National ID', 'cnic', profile.personal.cnic || '', 'National ID / CNIC / Passport number'],
+    ['Contact', 'Date of Birth (YYYY-MM-DD)', 'dob', profile.personal.dob || '', 'e.g. 1998-05-24 or 24/05/1998'],
     ['Contact', 'Street Address', 'address', profile.personal.address || '', 'House / Street address'],
     ['Contact', 'City', 'city', profile.personal.city || '', 'Current city'],
     ['Contact', 'State / Province', 'state', profile.personal.state || '', 'State / Province / Region'],
@@ -241,6 +242,9 @@ export function parseExcelProfile(
       count++;
     } else if (normKey === 'cnic' || normName.includes('cnic') || normName.includes('nationalid')) {
       updated.personal.cnic = val;
+      count++;
+    } else if (normKey === 'dob' || normName.includes('dateofbirth') || normName.includes('birthdate') || normName === 'dob') {
+      updated.personal.dob = val;
       count++;
     } else if (normKey === 'address' || normName.includes('address')) {
       updated.personal.address = val;

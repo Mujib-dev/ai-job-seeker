@@ -230,6 +230,26 @@ export function parseResumeText(rawText: string, currentProfile: UserProfile): P
     count++;
   }
 
+  // 2b. Extract CNIC / National ID
+  const cnicRegex = /\b(\d{5}[-\s]?\d{7}[-\s]?\d{1})\b/;
+  const cnicMatch = cleanText.match(cnicRegex);
+  if (cnicMatch) {
+    const cnic = cnicMatch[1].replace(/\s+/g, '-');
+    updated.personal.cnic = cnic;
+    extractedFields['CNIC / ID'] = cnic;
+    count++;
+  }
+
+  // 2c. Extract Date of Birth (DOB)
+  const dobRegex = /(?:dob|date\s+of\s+birth|birth\s*date|born):\s*([0-9a-zA-Z\s,/-]{6,25})/i;
+  const dobMatch = cleanText.match(dobRegex);
+  if (dobMatch) {
+    const rawDob = dobMatch[1].trim();
+    updated.personal.dob = rawDob;
+    extractedFields['Date of Birth'] = rawDob;
+    count++;
+  }
+
   // 3. Extract Links: LinkedIn, GitHub, Portfolio
   const linkedinRegex = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)/i;
   const linkedinMatch = cleanText.match(linkedinRegex);

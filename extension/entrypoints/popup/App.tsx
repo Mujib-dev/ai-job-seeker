@@ -469,6 +469,7 @@ export default function App() {
       else if (/address/i.test(lower) && !updated.personal.address) updated.personal.address = val;
       else if (/city/i.test(lower) && !updated.personal.city) updated.personal.city = val;
       else if (/cnic|national/i.test(lower) && !updated.personal.cnic) updated.personal.cnic = val;
+      else if (/birth|dob/i.test(lower) && !updated.personal.dob) updated.personal.dob = val;
     } else if (section === 'work') {
       if (/title|role/i.test(lower) && !updated.work.currentTitle) updated.work.currentTitle = val;
       else if (/company|employer/i.test(lower) && !updated.work.currentCompany) updated.work.currentCompany = val;
@@ -543,6 +544,14 @@ export default function App() {
           [cleanKey]: val,
         },
       };
+
+      const lower = field.label.toLowerCase();
+      if (section === 'contact') {
+        if (/birth|dob/i.test(lower) && !updated.personal.dob) updated.personal.dob = val;
+        else if (/cnic|national/i.test(lower) && !updated.personal.cnic) updated.personal.cnic = val;
+        else if (/phone|mobile/i.test(lower) && !updated.personal.phone) updated.personal.phone = val;
+        else if (/email/i.test(lower) && !updated.personal.email) updated.personal.email = val;
+      }
     }
 
     setProfile(updated);
@@ -1469,7 +1478,13 @@ export default function App() {
                         </div>
                         <div className="flex gap-1.5">
                           <input
-                            type={field.type === 'password' ? 'password' : 'text'}
+                            type={
+                              field.type === 'password'
+                                ? 'password'
+                                : field.type === 'date' || /birth|dob/i.test(field.label)
+                                ? 'date'
+                                : 'text'
+                            }
                             value={missingFieldInputs[field.id] || ''}
                             onChange={(e) => setMissingFieldInputs({ ...missingFieldInputs, [field.id]: e.target.value })}
                             onKeyDown={(e) => {
@@ -1777,15 +1792,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] text-slate-400">National ID / CNIC (User ID)</label>
-                  <input
-                    type="text"
-                    value={profile.personal.cnic || ''}
-                    placeholder="e.g. 17301-1234567-1"
-                    onChange={(e) => updatePersonal('cnic', e.target.value)}
-                    className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400">National ID / CNIC (User ID)</label>
+                    <input
+                      type="text"
+                      value={profile.personal.cnic || ''}
+                      placeholder="e.g. 17301-1234567-1"
+                      onChange={(e) => updatePersonal('cnic', e.target.value)}
+                      className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400">Date of Birth (DOB)</label>
+                    <input
+                      type="date"
+                      value={profile.personal.dob || ''}
+                      onChange={(e) => updatePersonal('dob', e.target.value)}
+                      className="w-full text-xs p-2 rounded bg-slate-950 border border-slate-800 text-slate-200"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -3175,8 +3201,48 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
     // 3. Dispatch events
     el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+
+    // Support Flatpickr calendar instances
+    if ((el as any)._flatpickr) {
+      try {
+        (el as any)._flatpickr.setDate(trimmed, true);
+      } catch {}
+    }
+
     try { el.blur(); } catch {}
     return true;
+  }
+
+  function formatDob(raw: string, el: HTMLElement, desc: string): string {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    let year = '', month = '', day = '';
+    const iso = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    const dmy = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (iso) {
+      year = iso[1]; month = iso[2].padStart(2, '0'); day = iso[3].padStart(2, '0');
+    } else if (dmy) {
+      const p1 = parseInt(dmy[1], 10);
+      const p2 = parseInt(dmy[2], 10);
+      year = dmy[3];
+      if (p1 > 12) { day = String(p1).padStart(2, '0'); month = String(p2).padStart(2, '0'); }
+      else if (p2 > 12) { month = String(p1).padStart(2, '0'); day = String(p2).padStart(2, '0'); }
+      else { day = String(p1).padStart(2, '0'); month = String(p2).padStart(2, '0'); }
+    } else {
+      const p = Date.parse(trimmed);
+      if (!isNaN(p)) {
+        const d = new Date(p);
+        year = String(d.getFullYear());
+        month = String(d.getMonth() + 1).padStart(2, '0');
+        day = String(d.getDate()).padStart(2, '0');
+      }
+    }
+    if (!year || !month || !day) return trimmed;
+    if (el.getAttribute('type')?.toLowerCase() === 'date') return `${year}-${month}-${day}`;
+    const d = desc.toLowerCase();
+    if (/mm[\s_/-]?dd[\s_/-]?yyyy|mm-dd-yyyy/i.test(d)) return `${month}/${day}/${year}`;
+    if (/dd[\s_/-]?mm[\s_/-]?yyyy|dd-mm-yyyy/i.test(d)) return `${day}/${month}/${year}`;
+    return `${year}-${month}-${day}`;
   }
 
   function getDesc(el: HTMLElement): string {
@@ -3281,6 +3347,7 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
     }
 
     const desc = getDesc(input);
+    const cleanLabel = (getCleanLabel(input) || '').toLowerCase();
     let matched = false;
 
     // Phone / Mobile (Check first so "Mobile" field never gets filled with email!)
@@ -3291,32 +3358,91 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
       }
       matched = setVal(input, phoneVal);
     }
-    // Email (Strictly exclude mobile/phone)
-    else if ((/e[\s_-]?mail|email[\s_-]?address/i.test(desc) || (input as HTMLInputElement).type === 'email') && !/phone|mobile|tel|cell/i.test(desc)) {
+    // Email (Strictly exclude mobile/phone/cnic)
+    else if ((/e[\s_-]?mail|email[\s_-]?address/i.test(desc) || (input as HTMLInputElement).type === 'email') && !/phone|mobile|tel|cell|cnic/i.test(desc)) {
       matched = setVal(input, profile.personal?.email);
     }
-    // User ID / CNIC / NICOP / Afghan Refugee / National ID
-    else if (/cnic|nicop|afghan[\s_-]?refugee|por(?!\w)|national[\s_-]?id|identity[\s_-]?card|user[\s_-]?id/i.test(desc)) {
-      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '';
+    // Date of Birth (DOB) - evaluated BEFORE generic ID/CNIC so "DOB as per CNIC" fills DOB!
+    else if (
+      (/date[\s_-]?of[\s_-]?birth|birth[\s_-]?date|\bdob\b|birthday/i.test(desc) ||
+       (input as HTMLInputElement).type === 'date' ||
+       input.getAttribute('name') === 'dob' ||
+       input.id === 'dob' ||
+       cleanLabel.includes('date of birth') ||
+       cleanLabel.includes('birth date') ||
+       cleanLabel === 'dob') &&
+      !/expiry|issue|start|end|graduat/i.test(desc)
+    ) {
+      const rawDob = profile.personal?.dob || profile.customAnswers?.['dob'] || profile.customAnswers?.['date_of_birth'] || '';
+      if (rawDob) {
+        const formatted = formatDob(rawDob, input, desc);
+        matched = setVal(input, formatted);
+      }
+    }
+    // First Name
+    else if (
+      (cleanLabel === 'first name' || (/first[\s_-]?name|given[\s_-]?name|fname/i.test(desc) && cleanLabel !== 'name')) &&
+      !/last|sur|family|company|school/i.test(desc)
+    ) {
+      matched = setVal(input, profile.personal?.firstName);
+    }
+    // Last Name
+    else if (
+      (/last[\s_-]?name|family[\s_-]?name|surname|lname/i.test(desc) || cleanLabel === 'last name') &&
+      !/first/i.test(desc)
+    ) {
+      matched = setVal(input, profile.personal?.lastName);
+    }
+    // Full Name / Candidate Name / Name (MUST NOT match CNIC even if placeholder says "First Name as per CNIC"!)
+    else if (
+      (/full[\s_-]?name|candidate[\s_-]?name|applicant[\s_-]?name|legal[\s_-]?name/i.test(desc) ||
+       cleanLabel === 'name' ||
+       cleanLabel === 'full name' ||
+       cleanLabel === 'candidate name' ||
+       cleanLabel === 'applicant name' ||
+       (/^name$/i.test(input.getAttribute('name') || '') || /^name$/i.test(input.id || '')) ||
+       (/\bname\b/i.test(cleanLabel) && !/user|father|mother|spouse|company|school|sur/i.test(cleanLabel))) &&
+      !/father|mother|spouse|company|school|file|user[\s_-]?name/i.test(desc.replace(/as[\s_-]?per[\s_-]?cnic/gi, ''))
+    ) {
+      const fullName = `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim() || profile.personal?.firstName;
+      matched = setVal(input, fullName);
+    }
+    // Confirm CNIC Number
+    else if (/confirm[\s_-]?cnic|c_cnic|re[\s_-]?enter[\s_-]?cnic/i.test(desc)) {
+      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || '';
       if (idVal) {
-        if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc)) {
+        if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc) || (input as HTMLInputElement).maxLength === 13) {
           idVal = idVal.replace(/\D/g, '');
         }
         matched = setVal(input, idVal);
       }
     }
-    // First Name
-    else if (/first[\s_-]?name|given[\s_-]?name|fname/i.test(desc) && !/last|full|sur/i.test(desc)) {
-      matched = setVal(input, profile.personal?.firstName);
+    // User ID / CNIC / NICOP / Afghan Refugee / National ID
+    // STRICT GUARD: Exclude if cleanLabel is Name / DOB or if "as per cnic" was just an instruction!
+    else if (
+      /(\bcnic\b|\bnicop\b|afghan[\s_-]?refugee|por(?!\w)|national[\s_-]?id|identity[\s_-]?card|user[\s_-]?id)/i.test(
+        desc.replace(/as[\s_-]?per[\s_-]?cnic/gi, '')
+      ) &&
+      !/as[\s_-]?per[\s_-]?cnic/i.test(cleanLabel) &&
+      !/\b(name|birth|dob|date|email|phone)\b/i.test(cleanLabel)
+    ) {
+      let idVal = profile.personal?.cnic || profile.customAnswers?.['cnic'] || profile.customAnswers?.['user_id'] || '';
+      if (idVal) {
+        if (/without[\s_-]?dash|no[\s_-]?dash|digits[\s_-]?only/i.test(desc) || (input as HTMLInputElement).maxLength === 13) {
+          idVal = idVal.replace(/\D/g, '');
+        }
+        matched = setVal(input, idVal);
+      }
     }
-    // Last Name
-    else if (/last[\s_-]?name|family[\s_-]?name|surname|lname/i.test(desc) && !/first/i.test(desc)) {
-      matched = setVal(input, profile.personal?.lastName);
+    // Confirm Password
+    else if (/confirm[\s_-]?password|c_password|repeat[\s_-]?password/i.test(desc)) {
+      const pwd = profile.customAnswers?.['password'] || profile.customAnswers?.['confirm_password'] || '';
+      if (pwd) matched = setVal(input, pwd);
     }
-    // Full Name
-    else if (/full[\s_-]?name|^name$|candidate[\s_-]?name/i.test(desc) && !/first|last|company|school/i.test(desc)) {
-      const fullName = `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim();
-      matched = setVal(input, fullName);
+    // Password
+    else if (((input as HTMLInputElement).type === 'password' || /password|passwd|pwd/i.test(desc)) && !/confirm|c_pass/i.test(desc)) {
+      const pwd = profile.customAnswers?.['password'] || '';
+      if (pwd) matched = setVal(input, pwd);
     }
     // LinkedIn
     else if (/linkedin/i.test(desc)) {
@@ -3393,16 +3519,17 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
         const l = entry.label;
         const v = entry.value;
         if (!v) continue;
-        if (desc.includes(l) || l.includes(desc)) {
+        // Exact cleanLabel or descriptor contains (>= 4 chars)
+        if (cleanLabel === l || (l.length >= 4 && (desc.includes(l) || cleanLabel.includes(l)))) {
           matched = setVal(input, v);
           if (matched) break;
         }
-        if (/pin|security|key|pass/i.test(desc) && /pin|security|key|pass/i.test(l)) {
+        if (/pin|security|key/i.test(desc) && /pin|security|key/i.test(l)) {
           matched = setVal(input, v);
           if (matched) break;
         }
-        const tokens = l.split(/\s+/).filter(w => w.length >= 3);
-        if (tokens.some(t => desc.includes(t))) {
+        const tokens = l.split(/\s+/).filter(w => w.length >= 4 && !/^(name|date|text|user|info|card)$/i.test(w));
+        if (tokens.length > 0 && tokens.every(t => desc.includes(t) || cleanLabel.includes(t))) {
           matched = setVal(input, v);
           if (matched) break;
         }

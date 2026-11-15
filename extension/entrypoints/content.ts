@@ -1,5 +1,5 @@
 import { defineContentScript } from 'wxt/sandbox';
-import { autofillForm, extractPageJobContext, detectUnfilledFields, setNativeValue, getFieldDescriptor, getCleanFieldLabel } from '../lib/autofill';
+import { autofillForm, extractPageJobContext, detectUnfilledFields, setNativeValue, getFieldDescriptor, getCleanFieldLabel, formatDobValue } from '../lib/autofill';
 import { getUserProfile, incrementUsage, getUserSubscription, hasAnyProfileData } from '../lib/storage';
 import { APP_ICON_BASE64 } from '../lib/iconBase64';
 
@@ -68,7 +68,11 @@ export default defineContentScript({
           }
 
           if (target) {
-            setNativeValue(target, value);
+            let valToSet = value;
+            if (target.getAttribute('type') === 'date' || /birth|dob/i.test(fieldLabel || '') || /birth|dob/i.test(fieldName || '')) {
+              valToSet = formatDobValue(value, target, getFieldDescriptor(target));
+            }
+            setNativeValue(target, valToSet);
             target.style.transition = 'background-color 0.4s ease';
             target.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
             setTimeout(() => { target.style.backgroundColor = ''; }, 1500);
@@ -145,8 +149,8 @@ function injectFloatingWidget() {
     const saved = localStorage.getItem('ai_job_seeker_btn_pos');
     if (saved) {
       const { left, top } = JSON.parse(saved);
-      // If previous position was the old default bottom-left corner, reset to the new right-side default
-      const isOldDefaultLeft = left <= 32 && top >= window.innerHeight - 90;
+      // If previous position was on the left half or old default bottom-left corner, reset to right-side default
+      const isOldDefaultLeft = left <= 100;
       if (isOldDefaultLeft) {
         host.style.bottom = '24px';
         host.style.right = '24px';
@@ -219,13 +223,17 @@ function injectFloatingWidget() {
       background: #0f172a;
       color: #38bdf8;
       border: 1px solid #1e293b;
-      padding: 8px 14px;
+      padding: 9px 14px;
       border-radius: 12px;
       font-size: 12px;
-      white-space: nowrap;
+      line-height: 1.4;
+      white-space: normal;
+      width: max-content;
+      max-width: 290px;
       box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
       animation: fadeIn 0.2s ease-out;
       pointer-events: none;
+      z-index: 9999;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -445,14 +453,20 @@ function injectFloatingWidget() {
         `;
 
         if (result.unfilledFields && result.unfilledFields.length > 0) {
-          showWidgetToast(container, `✨ Filled ${result.filledFieldsCount} fields. Open extension to fill remaining fields!`);
+          const sample = result.unfilledFields.slice(0, 3).map((f) => f.label).join(', ');
+          showWidgetToast(container, `✨ Filled ${result.filledFieldsCount} fields. Missing: ${sample}. Open extension to add!`);
         } else {
           showWidgetToast(container, `✨ Filled ${result.filledFieldsCount} fields!`);
         }
       } else {
         btn.style.opacity = '1';
         btn.innerHTML = `<span>No fields</span>`;
-        showWidgetToast(container, 'ℹ️ No matching empty fields found. Open extension to add fields!');
+        if (result.unfilledFields && result.unfilledFields.length > 0) {
+          const sample = result.unfilledFields.slice(0, 3).map((f) => f.label).join(', ');
+          showWidgetToast(container, `⚠️ Missing ${result.unfilledFields.length} fields: ${sample}. Open extension to add!`);
+        } else {
+          showWidgetToast(container, 'ℹ️ No matching empty fields found. Open extension to add fields!');
+        }
       }
       setTimeout(resetBtn, 2500);
     } catch (err: any) {
@@ -486,9 +500,25 @@ function showWidgetToast(container: HTMLElement, message: string) {
   const toast = document.createElement('div');
   toast.className = 'status-toast';
   toast.textContent = message;
+
+  // If host is near the left screen edge, align toast to left so it doesn't get cut off
+  const host = container.getRootNode() instanceof ShadowRoot
+    ? ((container.getRootNode() as ShadowRoot).host as HTMLElement)
+    : null;
+  if (host) {
+    const rect = host.getBoundingClientRect();
+    if (rect.left < 200) {
+      toast.style.left = '0';
+      toast.style.right = 'auto';
+    } else {
+      toast.style.right = '0';
+      toast.style.left = 'auto';
+    }
+  }
+
   container.appendChild(toast);
 
   setTimeout(() => {
     toast.remove();
-  }, 3500);
+  }, 4000);
 }
