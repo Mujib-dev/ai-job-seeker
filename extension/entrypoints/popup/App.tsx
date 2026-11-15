@@ -1185,7 +1185,7 @@ export default function App() {
               onClick={() => setShowPricingModal(true)}
               className={`flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer shadow-sm ${
                 isDark
-                  ? 'font-semibold text-amber-300 bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border-amber-500/30'
+                  ? 'font-semibold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30'
                   : 'font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border-amber-400'
               }`}
               title="Click to upgrade"
@@ -1385,7 +1385,7 @@ export default function App() {
                   <div className={`w-full h-2 rounded-full overflow-hidden border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                     <div
                       className={`h-full transition-all duration-300 rounded-full ${
-                        isMaxed ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
+                        isMaxed ? 'bg-red-500' : 'bg-indigo-600'
                       }`}
                       style={{ width: `${percent}%` }}
                     />
@@ -1408,7 +1408,7 @@ export default function App() {
               <button
                 onClick={() => handleTriggerAutofill()}
                 disabled={autofillLoading}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
                 <Zap className="w-4 h-4 fill-white" />
                 {autofillLoading ? 'Filling...' : 'Fill Form'}
@@ -1421,7 +1421,7 @@ export default function App() {
 
             {/* Auto-Detected Missing Fields on Page (Asks customer to fill & arranges in specific area) */}
             {detectedUnfilledFields.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/50 border border-indigo-500/40 shadow-lg space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-900 border border-indigo-500/30 shadow-lg space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -1613,7 +1613,7 @@ export default function App() {
           <div className="space-y-3.5">
             {/* First Time Welcome Banner (Only shown if user has not updated ANY input yet) */}
             {!hasUpdatedAnyInput && (
-              <div className="p-3 rounded-xl bg-gradient-to-r from-indigo-500/20 via-cyan-500/15 to-transparent border border-indigo-500/30 flex items-start gap-2.5">
+              <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-2.5">
                 <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
                 <div className="text-xs">
                   <h4 className="font-bold text-white">Welcome! Enter your details once</h4>
@@ -1631,14 +1631,14 @@ export default function App() {
               </div>
               <button
                 onClick={handleSaveProfile}
-                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-1.5 active:scale-95"
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-1.5 active:scale-95"
               >
                 <Zap className="w-3.5 h-3.5 fill-white" /> Save & Fill Form
               </button>
             </div>
 
             {/* Excel & CV Import / Export Card (Auto-arranges all data into specific sections) */}
-            <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-cyan-950/50 border border-indigo-500/30 shadow-md space-y-2">
+            <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
@@ -2321,7 +2321,7 @@ export default function App() {
               <button
                 onClick={handleGenerateCoverLetter}
                 disabled={coverLoading}
-                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 {coverLoading ? 'Writing...' : 'Write Cover Letter'}
@@ -2484,8 +2484,8 @@ export default function App() {
             <div
               className={`p-3.5 rounded-xl border space-y-2.5 ${
                 isDark
-                  ? 'bg-gradient-to-br from-indigo-950/60 to-slate-900 border-indigo-500/30'
-                  : 'bg-gradient-to-br from-indigo-50/90 to-blue-50/70 border-indigo-200 shadow-sm'
+                  ? 'bg-slate-900 border-indigo-500/30'
+                  : 'bg-slate-50 border-slate-200 shadow-sm'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -2514,7 +2514,7 @@ export default function App() {
                 <div className={`w-full h-2 rounded-full overflow-hidden border my-1 ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                   <div
                     className={`h-full transition-all duration-300 rounded-full ${
-                      currentUsage >= freeLimit ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
+                      currentUsage >= freeLimit ? 'bg-red-500' : 'bg-indigo-600'
                     }`}
                     style={{ width: `${Math.min(100, (currentUsage / freeLimit) * 100)}%` }}
                   />
@@ -2523,7 +2523,7 @@ export default function App() {
 
               <button
                 onClick={() => setShowPricingModal(true)}
-                className="w-full py-2 rounded-lg bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-slate-950 font-extrabold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Crown className="w-3.5 h-3.5" />
                 <span>{subscription.isPro ? 'Manage Subscription' : 'Upgrade to Pro ($2.99 / $8.99)'}</span>
@@ -2787,7 +2787,7 @@ export default function App() {
           {/* Modal Header */}
           <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-sm">
+              <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>How AI Job Seeker Works</span>
@@ -2893,7 +2893,7 @@ export default function App() {
           <div className="mt-auto pt-3 space-y-2">
             <button
               onClick={handleGuideGoToProfile}
-              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition cursor-pointer flex items-center justify-center gap-1.5"
             >
               <span>Set Up My Profile Now (1 min) →</span>
             </button>
@@ -2920,7 +2920,7 @@ export default function App() {
           {/* Modal Header */}
           <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center shadow-sm">
+              <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center shadow-sm">
                 <Crown className="w-4 h-4 text-slate-950" />
               </div>
               <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>Choose Your Plan</span>
@@ -2950,7 +2950,7 @@ export default function App() {
               className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                 pricingTier === 'monthly'
                   ? isDark
-                    ? 'bg-gradient-to-b from-indigo-950/80 to-slate-900 border-indigo-500 shadow-md shadow-indigo-500/10'
+                    ? 'bg-indigo-950/60 border-indigo-500 shadow-md shadow-indigo-500/10'
                     : 'bg-indigo-50/70 border-indigo-500 shadow-md shadow-indigo-500/15'
                   : isDark
                   ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
@@ -3002,14 +3002,14 @@ export default function App() {
               className={`p-3.5 rounded-xl border relative transition-all cursor-pointer flex flex-col justify-between ${
                 pricingTier === 'lifetime'
                   ? isDark
-                    ? 'bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 border-amber-500 shadow-md shadow-amber-500/10'
+                    ? 'bg-amber-950/40 border-amber-500 shadow-md shadow-amber-500/10'
                     : 'bg-amber-50/70 border-amber-500 shadow-md shadow-amber-500/15'
                   : isDark
                   ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
                   : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
               }`}
             >
-              <div className="absolute -top-2.5 right-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-sm">
+              <div className="absolute -top-2.5 right-3 bg-amber-500 text-slate-950 text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-sm">
                 BEST VALUE
               </div>
 
@@ -3058,7 +3058,7 @@ export default function App() {
             <button
               onClick={() => handleStartCheckout(pricingTier)}
               disabled={loading}
-              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-slate-950 font-extrabold text-xs shadow-md shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-md shadow-amber-500/20 transition cursor-pointer flex items-center justify-center gap-2"
             >
               <Zap className="w-3.5 h-3.5 fill-current" />
               <span>

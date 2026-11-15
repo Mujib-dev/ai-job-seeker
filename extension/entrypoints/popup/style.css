@@ -193,7 +193,7 @@ body.theme-light a.bg-emerald-600\/90 * {
   fill: #ffffff !important;
 }
 
-/* Amber/Orange Gradient Buttons MUST KEEP CRISP DARK TEXT */
+/* Amber/Orange Accent Buttons MUST KEEP CRISP DARK TEXT */
 body.theme-light button.from-amber-500,
 body.theme-light .from-amber-500,
 body.theme-light .text-slate-950 {
@@ -253,16 +253,13 @@ body.theme-light .bg-indigo-600.text-white {
 }
 
 /* Pricing Cards & Current Plan in Light Mode */
-body.theme-light .bg-gradient-to-br.from-indigo-950\/60 {
-  background: linear-gradient(to bottom right, #f0f4ff, #ffffff) !important;
-  border-color: #c7d2fe !important;
+body.theme-light .bg-indigo-950\/60,
+body.theme-light .bg-slate-900 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
 }
-body.theme-light .bg-gradient-to-b.from-indigo-950\/80 {
-  background: linear-gradient(to bottom, #eef2ff, #ffffff) !important;
-  border-color: #6366f1 !important;
-}
-body.theme-light .bg-gradient-to-b.from-amber-950\/40 {
-  background: linear-gradient(to bottom, #fffbeb, #ffffff) !important;
+body.theme-light .bg-amber-950\/40 {
+  background-color: #fefce8 !important;
   border-color: #f59e0b !important;
 }
 

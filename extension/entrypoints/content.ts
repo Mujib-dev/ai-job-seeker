@@ -175,18 +175,19 @@ function injectFloatingWidget() {
       align-items: center;
       gap: 7px;
       padding: 9px 15px;
-      background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+      background: #4f46e5;
       color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 9999px;
       font-size: 13px;
       font-weight: 600;
       box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4), 0 8px 10px -6px rgba(79, 70, 229, 0.2);
       cursor: grab;
       user-select: none;
-      transition: box-shadow 0.2s ease, transform 0.15s ease;
+      transition: background-color 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
     }
     .floating-btn:hover {
+      background: #4338ca;
       box-shadow: 0 14px 28px -4px rgba(79, 70, 229, 0.55);
       transform: scale(1.02);
     }
