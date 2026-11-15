@@ -4,6 +4,17 @@ export interface CustomSectionField {
   value: string;
 }
 
+export interface DetectedField {
+  id: string;
+  name: string;
+  label: string;
+  category: 'contact' | 'links' | 'work' | 'education' | 'eeo';
+  type: string;
+  placeholder: string;
+  currentValue?: string;
+  selector?: string;
+}
+
 export interface UserProfile {
   personal: {
     firstName: string;

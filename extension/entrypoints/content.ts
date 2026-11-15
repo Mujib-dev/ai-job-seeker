@@ -1,5 +1,5 @@
 import { defineContentScript } from 'wxt/sandbox';
-import { autofillForm, extractPageJobContext } from '../lib/autofill';
+import { autofillForm, extractPageJobContext, detectUnfilledFields, setNativeValue, getFieldDescriptor, getCleanFieldLabel } from '../lib/autofill';
 import { getUserProfile, incrementUsage, getUserSubscription, hasAnyProfileData } from '../lib/storage';
 import { APP_ICON_BASE64 } from '../lib/iconBase64';
 
@@ -22,10 +22,62 @@ export default defineContentScript({
       if (request.type === 'EXECUTE_AUTOFILL') {
         try {
           const result = autofillForm(request.profile);
-          sendResponse({ filledCount: result.filledFieldsCount, total: result.totalFieldsFound });
+          sendResponse({
+            filledCount: result.filledFieldsCount,
+            total: result.totalFieldsFound,
+            unfilledFields: result.unfilledFields,
+          });
         } catch (err: any) {
           console.error('Autofill error:', err);
-          sendResponse({ filledCount: 0, error: err?.message });
+          sendResponse({ filledCount: 0, error: err?.message, unfilledFields: [] });
+        }
+        return false;
+      }
+
+      if (request.type === 'DETECT_UNFILLED_FIELDS') {
+        try {
+          const fields = detectUnfilledFields(request.profile);
+          sendResponse({ fields });
+        } catch (err: any) {
+          sendResponse({ fields: [] });
+        }
+        return false;
+      }
+
+      if (request.type === 'FILL_SINGLE_FIELD') {
+        try {
+          const { fieldName, fieldLabel, value, selector } = request;
+          let target: any = null;
+          if (selector) target = document.querySelector(selector);
+          if (!target && fieldName) {
+            try {
+              target = document.querySelector(`[name="${CSS.escape(fieldName)}"], #${CSS.escape(fieldName)}`);
+            } catch {}
+          }
+          if (!target && fieldLabel) {
+            const all = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea'));
+            const fl = fieldLabel.toLowerCase();
+            for (const item of all) {
+              const d = getFieldDescriptor(item as HTMLElement);
+              const cl = getCleanFieldLabel(item as HTMLElement).toLowerCase();
+              if (d.includes(fl) || cl.includes(fl) || fl.includes(cl)) {
+                target = item;
+                break;
+              }
+            }
+          }
+
+          if (target) {
+            setNativeValue(target, value);
+            target.style.transition = 'background-color 0.4s ease';
+            target.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
+            setTimeout(() => { target.style.backgroundColor = ''; }, 1500);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false });
+          }
+        } catch (err: any) {
+          sendResponse({ success: false, error: err?.message });
         }
         return false;
       }
@@ -178,9 +230,9 @@ function injectFloatingWidget() {
 
   const btn = document.createElement('button');
   btn.className = 'floating-btn';
-  btn.title = 'Drag to move anywhere on screen • Click to Autofill';
+  btn.title = 'Drag to move • Click to Fill Form';
   btn.innerHTML = `
-    <span class="drag-handle" title="Drag to move anywhere">
+    <span class="drag-handle" title="Drag to move">
       <svg width="10" height="14" viewBox="0 0 10 16" fill="currentColor">
         <circle cx="2" cy="2" r="1.5"></circle>
         <circle cx="8" cy="2" r="1.5"></circle>
@@ -191,8 +243,7 @@ function injectFloatingWidget() {
       </svg>
     </span>
     <img src="${APP_ICON_BASE64}" style="width: 17px; height: 17px; border-radius: 4px; object-fit: cover; display: inline-block; vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" alt="AI Job Seeker" />
-    <span>AI Autofill</span>
-    <span class="badge">1-Click</span>
+    <span>Fill Form</span>
   `;
 
   // Make Moveable / Draggable anywhere across the screen
@@ -326,7 +377,7 @@ function injectFloatingWidget() {
   const resetBtn = () => {
     btn.style.opacity = '1';
     btn.innerHTML = `
-      <span class="drag-handle" title="Drag to move anywhere">
+      <span class="drag-handle" title="Drag to move">
         <svg width="10" height="14" viewBox="0 0 10 16" fill="currentColor">
           <circle cx="2" cy="2" r="1.5"></circle>
           <circle cx="8" cy="2" r="1.5"></circle>
@@ -337,8 +388,7 @@ function injectFloatingWidget() {
         </svg>
       </span>
       <img src="${APP_ICON_BASE64}" style="width: 17px; height: 17px; border-radius: 4px; object-fit: cover; display: inline-block; vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" alt="AI Job Seeker" />
-      <span>AI Autofill</span>
-      <span class="badge">1-Click</span>
+      <span>Fill Form</span>
     `;
   };
 
@@ -346,7 +396,7 @@ function injectFloatingWidget() {
     if (hasMoved) return; // Ignore click if user was dragging!
 
     btn.style.opacity = '0.7';
-    btn.innerText = 'Filling Form...';
+    btn.innerText = 'Filling...';
 
     try {
       const profile = await getUserProfile();
@@ -357,7 +407,7 @@ function injectFloatingWidget() {
       if (!hasAnyData) {
         showWidgetToast(container, 'Tip: Add your details in Profile tab first.');
         btn.style.opacity = '1';
-        btn.innerHTML = `<span>Set Profile First</span>`;
+        btn.innerHTML = `<span>Set Profile</span>`;
         setTimeout(resetBtn, 2000);
         return;
       }
@@ -367,9 +417,9 @@ function injectFloatingWidget() {
       const count = sub.monthlyUsageCount || 0;
 
       if (!sub.isPro && count >= limit) {
-        showWidgetToast(container, `⚠️ 0 left out of ${limit} this month. Click extension icon to upgrade.`);
+        showWidgetToast(container, `⚠️ 0 left out of ${limit} this month. Click extension to upgrade.`);
         btn.style.opacity = '1';
-        btn.innerHTML = `<span>0 Left This Month</span>`;
+        btn.innerHTML = `<span>0 Left</span>`;
         setTimeout(resetBtn, 2500);
         return;
       }
@@ -378,24 +428,23 @@ function injectFloatingWidget() {
 
       if (result.filledFieldsCount > 0) {
         await incrementUsage();
-        const remaining = Math.max(0, limit - (count + 1));
-
         btn.style.opacity = '1';
         btn.innerHTML = `
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          <span>Filled ${result.filledFieldsCount} Fields!</span>
+          <span>Filled ${result.filledFieldsCount}!</span>
         `;
 
-        const toastMsg = sub.isPro
-          ? `✨ Successfully filled ${result.filledFieldsCount} fields!`
-          : `✨ Filled ${result.filledFieldsCount} fields! (${remaining} left out of ${limit} this month)`;
-        showWidgetToast(container, toastMsg);
+        if (result.unfilledFields && result.unfilledFields.length > 0) {
+          showWidgetToast(container, `✨ Filled ${result.filledFieldsCount} fields. Open extension to fill remaining fields!`);
+        } else {
+          showWidgetToast(container, `✨ Filled ${result.filledFieldsCount} fields!`);
+        }
       } else {
         btn.style.opacity = '1';
-        btn.innerHTML = `<span>No Fields Found</span>`;
-        showWidgetToast(container, 'ℹ️ No matching application fields found on this page.');
+        btn.innerHTML = `<span>No fields</span>`;
+        showWidgetToast(container, 'ℹ️ No matching empty fields found. Open extension to add fields!');
       }
       setTimeout(resetBtn, 2500);
     } catch (err: any) {
@@ -407,10 +456,10 @@ function injectFloatingWidget() {
 
       if (isContextInvalid) {
         btn.style.opacity = '1';
-        btn.innerHTML = `<span>Please Refresh Page</span>`;
-        showWidgetToast(container, '⚠️ Extension was updated. Please refresh (F5) this page.');
+        btn.innerHTML = `<span>Refresh Page</span>`;
+        showWidgetToast(container, '⚠️ Please refresh (F5) this page.');
       } else {
-        showWidgetToast(container, '⚠️ Autofill finished with best-effort matching.');
+        showWidgetToast(container, '⚠️ Filled with best-effort matching.');
       }
       setTimeout(resetBtn, 2500);
     }

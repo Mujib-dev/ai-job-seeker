@@ -27,8 +27,10 @@ import {
   RefreshCw,
   HelpCircle,
   AlertCircle,
+  FileSpreadsheet,
+  UploadCloud,
 } from 'lucide-react';
-import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription } from '../../lib/types';
+import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription, DetectedField } from '../../lib/types';
 import {
   getUserProfile,
   saveUserProfile,
@@ -47,6 +49,8 @@ import {
 import { generateAIAnswer, generateAICoverLetter } from '../../lib/ai';
 import { API_BASE_URL } from '../../lib/config';
 import { APP_ICON_BASE64 } from '../../lib/iconBase64';
+import { downloadProfileExcel, parseExcelProfile } from '../../lib/excelProfile';
+import { extractTextFromFile, parseResumeText } from '../../lib/cvParser';
 
 type Tab = 'autofill' | 'profile' | 'cover-letter' | 'tracker' | 'settings';
 
@@ -119,6 +123,11 @@ export default function App() {
   // Active page detection state
   const [pageInfo, setPageInfo] = useState({ title: '', company: '', url: '', description: '' });
 
+  // Auto-detected missing fields on active page
+  const [detectedUnfilledFields, setDetectedUnfilledFields] = useState<DetectedField[]>([]);
+  const [missingFieldInputs, setMissingFieldInputs] = useState<Record<string, string>>({});
+  const [isScanningFields, setIsScanningFields] = useState(false);
+
   // AI Q&A State
   const [customQuestion, setCustomQuestion] = useState('');
   const [generatedAnswer, setGeneratedAnswer] = useState('');
@@ -139,6 +148,12 @@ export default function App() {
   const [licenseInput, setLicenseInput] = useState('');
   const [activatingLicense, setActivatingLicense] = useState(false);
   const [showFloatingWidget, setShowFloatingWidget] = useState(true);
+
+  // CV & Excel Import/Export State
+  const cvFileInputRef = React.useRef<HTMLInputElement>(null);
+  const excelFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isExtractingCv, setIsExtractingCv] = useState(false);
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -264,6 +279,14 @@ export default function App() {
               });
             }
           });
+
+          // Also scan for any unfilled fields on this page
+          chrome.tabs.sendMessage(tab.id, { type: 'DETECT_UNFILLED_FIELDS', profile }, (unfilledRes) => {
+            if (chrome.runtime.lastError || !unfilledRes) return;
+            if (Array.isArray(unfilledRes.fields)) {
+              setDetectedUnfilledFields(unfilledRes.fields);
+            }
+          });
         }
       });
     }
@@ -284,7 +307,7 @@ export default function App() {
     setSubscription(newSub);
   };
 
-  // Trigger 1-Click Form Autofill
+  // Trigger Form Autofill
   const handleTriggerAutofill = async (customProfileToUse?: UserProfile) => {
     if (autofillLoading) return; // Prevent double trigger
     const profileToUse = customProfileToUse || profile;
@@ -304,18 +327,18 @@ export default function App() {
       finished = true;
       setAutofillLoading(false);
       if (filled > 0) {
-        showToast(`✨ Autofilled ${filled} fields!`);
+        showToast(`✨ Filled ${filled} fields!`);
         recordApplicationAndUsage();
       } else if (message) {
         showToast(message);
       } else {
-        showToast('No matching empty fields found on this page.');
+        showToast('Ready to fill forms.');
       }
     };
 
     // Absolute hard safety timeout: button NEVER stays stuck longer than 2.2 seconds under any circumstances
     const safetyTimer = setTimeout(() => {
-      finish(0, 'Autofill ready.');
+      finish(0, 'Form scan ready.');
     }, 2200);
 
     try {
@@ -324,7 +347,7 @@ export default function App() {
           const tab = tabs?.[0];
           if (!tab || !tab.id) {
             clearTimeout(safetyTimer);
-            finish(0, 'Please open a job webpage to autofill.');
+            finish(0, 'Please open a webpage with a form.');
             return;
           }
 
@@ -334,7 +357,7 @@ export default function App() {
           // Disallow internal browser URLs
           if (tabUrl.startsWith('chrome://') || tabUrl.startsWith('edge://') || tabUrl.startsWith('chrome-extension://')) {
             clearTimeout(safetyTimer);
-            finish(0, 'Cannot autofill on internal browser pages.');
+            finish(0, 'Cannot fill on internal browser pages.');
             return;
           }
 
@@ -355,9 +378,13 @@ export default function App() {
                   (results) => {
                     clearTimeout(safetyTimer);
                     if (chrome.runtime.lastError) {
-                      finish(0, 'Please refresh the job page and click Autofill.');
+                      finish(0, 'Please refresh the page and click Fill Form.');
                     } else {
-                      const count = results?.[0]?.result ?? 0;
+                      const res = results?.[0]?.result;
+                      const count = typeof res === 'number' ? res : (res?.count ?? 0);
+                      if (res?.unfilled && Array.isArray(res.unfilled)) {
+                        setDetectedUnfilledFields(res.unfilled);
+                      }
                       finish(count);
                     }
                   }
@@ -380,6 +407,9 @@ export default function App() {
               } else {
                 msgAnswered = true;
                 clearTimeout(safetyTimer);
+                if (response.unfilledFields && Array.isArray(response.unfilledFields)) {
+                  setDetectedUnfilledFields(response.unfilledFields);
+                }
                 finish(response.filledCount);
               }
             });
@@ -396,11 +426,222 @@ export default function App() {
         });
       } else {
         clearTimeout(safetyTimer);
-        finish(0, 'Autofill simulated (demo environment)');
+        finish(0, 'Simulated in demo environment.');
       }
     } catch {
       clearTimeout(safetyTimer);
       finish(0, 'Please refresh the page and try again.');
+    }
+  };
+
+  // Save detected missing field into its specific area in profile and fill it on the page immediately
+  const handleSaveAndFillDetectedField = async (field: DetectedField) => {
+    const val = (missingFieldInputs[field.id] || '').trim();
+    if (!val) return;
+
+    markDataEntered();
+
+    const section = field.category || 'contact';
+    const currentSectionFields = (profile.sectionCustomFields && profile.sectionCustomFields[section]) || [];
+    const newFieldId = `f_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const newFields = [...currentSectionFields, { id: newFieldId, label: field.label, value: val }];
+    const cleanKey = field.label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    const updated: UserProfile = {
+      ...profile,
+      sectionCustomFields: {
+        ...(profile.sectionCustomFields || {}),
+        [section]: newFields,
+      },
+      customAnswers: {
+        ...(profile.customAnswers || {}),
+        [cleanKey]: val,
+      },
+    };
+
+    // If matches standard profile fields, also update them directly
+    const lower = field.label.toLowerCase();
+    if (section === 'contact') {
+      if (/email/i.test(lower) && !updated.personal.email) updated.personal.email = val;
+      else if (/phone|mobile/i.test(lower) && !updated.personal.phone) updated.personal.phone = val;
+      else if (/first[\s_-]?name/i.test(lower) && !updated.personal.firstName) updated.personal.firstName = val;
+      else if (/last[\s_-]?name/i.test(lower) && !updated.personal.lastName) updated.personal.lastName = val;
+      else if (/address/i.test(lower) && !updated.personal.address) updated.personal.address = val;
+      else if (/city/i.test(lower) && !updated.personal.city) updated.personal.city = val;
+      else if (/cnic|national/i.test(lower) && !updated.personal.cnic) updated.personal.cnic = val;
+    } else if (section === 'work') {
+      if (/title|role/i.test(lower) && !updated.work.currentTitle) updated.work.currentTitle = val;
+      else if (/company|employer/i.test(lower) && !updated.work.currentCompany) updated.work.currentCompany = val;
+      else if (/salary|pay|ctc/i.test(lower) && !updated.work.salaryExpectations) updated.work.salaryExpectations = val;
+      else if (/notice/i.test(lower) && !updated.work.noticePeriod) updated.work.noticePeriod = val;
+      else if (/experience/i.test(lower) && !updated.work.yearsExperience) updated.work.yearsExperience = val;
+    } else if (section === 'education') {
+      if (/school|university|college/i.test(lower) && !updated.education.school) updated.education.school = val;
+      else if (/degree/i.test(lower) && !updated.education.degree) updated.education.degree = val;
+      else if (/major|field/i.test(lower) && !updated.education.fieldOfStudy) updated.education.fieldOfStudy = val;
+    }
+
+    setProfile(updated);
+    await saveUserProfile(updated);
+
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tabId = tabs?.[0]?.id;
+        if (!tabId) return;
+        chrome.tabs.sendMessage(
+          tabId,
+          {
+            type: 'FILL_SINGLE_FIELD',
+            fieldName: field.name,
+            fieldLabel: field.label,
+            value: val,
+            selector: field.selector,
+          },
+          () => {
+            chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updated });
+          }
+        );
+      });
+    }
+
+    setDetectedUnfilledFields((prev) => prev.filter((f) => f.id !== field.id));
+    setMissingFieldInputs((prev) => {
+      const next = { ...prev };
+      delete next[field.id];
+      return next;
+    });
+
+    showToast(`✨ Saved & filled "${field.label}"!`);
+  };
+
+  const handleSaveAndFillAllDetected = async () => {
+    let updated = { ...profile };
+    const fieldsToFill = detectedUnfilledFields.filter((f) => (missingFieldInputs[f.id] || '').trim());
+    if (fieldsToFill.length === 0) {
+      showToast('Please type a value for at least one field.');
+      return;
+    }
+
+    markDataEntered();
+
+    for (const field of fieldsToFill) {
+      const val = missingFieldInputs[field.id].trim();
+      const section = field.category || 'contact';
+      const currentSectionFields = (updated.sectionCustomFields && updated.sectionCustomFields[section]) || [];
+      const newFieldId = `f_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      const newFields = [...currentSectionFields, { id: newFieldId, label: field.label, value: val }];
+      const cleanKey = field.label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+      updated = {
+        ...updated,
+        sectionCustomFields: {
+          ...(updated.sectionCustomFields || {}),
+          [section]: newFields,
+        },
+        customAnswers: {
+          ...(updated.customAnswers || {}),
+          [cleanKey]: val,
+        },
+      };
+    }
+
+    setProfile(updated);
+    await saveUserProfile(updated);
+
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tabId = tabs?.[0]?.id;
+        if (tabId) {
+          chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updated });
+        }
+      });
+    }
+
+    const filledIds = new Set(fieldsToFill.map((f) => f.id));
+    setDetectedUnfilledFields((prev) => prev.filter((f) => !filledIds.has(f.id)));
+    showToast(`✨ Saved & filled ${fieldsToFill.length} fields!`);
+  };
+
+  // Excel Export Handler (Generates template with UTF-8 BOM for Microsoft Excel)
+  const handleExportExcel = () => {
+    try {
+      downloadProfileExcel(profile);
+      showToast('📊 Excel template downloaded! Edit in Excel & upload back.');
+    } catch (err: any) {
+      showToast('Failed to export Excel template.');
+    }
+  };
+
+  // Excel Upload & Auto-Arrange Handler
+  const handleUploadExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImportingExcel(true);
+    try {
+      const text = await file.text();
+      const { updatedProfile, count } = parseExcelProfile(text, profile);
+      if (count === 0) {
+        showToast('No fields found to import in CSV file.');
+      } else {
+        setProfile(updatedProfile);
+        await saveUserProfile(updatedProfile);
+        markDataEntered();
+        showToast(`✨ Arranged & imported ${count} fields from Excel!`);
+        // If on active page, scan or offer to autofill
+        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tabId = tabs?.[0]?.id;
+            if (tabId) {
+              chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updatedProfile });
+            }
+          });
+        }
+      }
+    } catch (err: any) {
+      showToast(`Import error: ${err?.message || 'Invalid CSV file'}`);
+    } finally {
+      setIsImportingExcel(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  // CV / Resume Upload & Extraction Handler
+  const handleUploadCV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsExtractingCv(true);
+    try {
+      const rawText = await extractTextFromFile(file);
+      if (!rawText || rawText.trim().length < 20) {
+        showToast('Could not extract text. Please use a text-based PDF or TXT.');
+        return;
+      }
+      const { updatedProfile, extractedCount, skillsFound } = parseResumeText(rawText, profile);
+      if (extractedCount === 0) {
+        showToast('No candidate details could be recognized in document.');
+      } else {
+        setProfile(updatedProfile);
+        await saveUserProfile(updatedProfile);
+        markDataEntered();
+        const msg = skillsFound.length > 0
+          ? `✨ Extracted ${extractedCount} items (${skillsFound.length} skills) from CV!`
+          : `✨ Extracted ${extractedCount} fields from CV!`;
+        showToast(msg);
+        // If on active page, also trigger immediate autofill with extracted data!
+        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tabId = tabs?.[0]?.id;
+            if (tabId) {
+              chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updatedProfile });
+            }
+          });
+        }
+      }
+    } catch (err: any) {
+      showToast(`CV parsing error: ${err?.message || 'Could not parse document'}`);
+    } finally {
+      setIsExtractingCv(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -695,7 +936,7 @@ export default function App() {
         {addingInputSection === section && (
           <div className="p-2.5 rounded-lg bg-slate-950 border border-indigo-500/50 space-y-2 mt-2">
             <div className="flex items-center justify-between text-[11px] text-indigo-400 font-semibold">
-              <span>Add Custom Input to this section</span>
+              <span>Add Field to this section</span>
               <button
                 type="button"
                 onClick={() => {
@@ -748,7 +989,7 @@ export default function App() {
                 disabled={!newSectionLabel.trim()}
                 className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-40"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Field
+                <Plus className="w-3.5 h-3.5" /> Save Field
               </button>
             </div>
           </div>
@@ -857,6 +1098,21 @@ export default function App() {
 
   return (
     <div className={`flex flex-col h-[600px] w-[480px] select-none ${theme === 'light' ? 'theme-light' : 'bg-[#0b0f19] text-slate-100'}`}>
+      {/* Hidden File Inputs for CV and Excel */}
+      <input
+        ref={cvFileInputRef}
+        type="file"
+        accept=".pdf,.docx,.txt,.md,.rtf"
+        onChange={handleUploadCV}
+        className="hidden"
+      />
+      <input
+        ref={excelFileInputRef}
+        type="file"
+        accept=".csv,.txt"
+        onChange={handleUploadExcel}
+        className="hidden"
+      />
       {/* Toast Feedback Notification */}
       {feedback && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg shadow-indigo-500/25 flex items-center gap-2 animate-bounce font-medium">
@@ -1076,15 +1332,23 @@ export default function App() {
                 <div className="flex items-center gap-2 min-w-0">
                   <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                   <p className={`text-[11px] ${isDark ? 'text-amber-200' : 'text-amber-800'}`}>
-                    Tip: Add details in Profile tab for 1-click autofill.
+                    Tip: Upload CV or fill Profile for 1-click autofill.
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
+                    onClick={() => cvFileInputRef.current?.click()}
+                    disabled={isExtractingCv}
+                    className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-[10px] font-semibold whitespace-nowrap cursor-pointer transition flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>{isExtractingCv ? 'Reading...' : 'Upload CV'}</span>
+                  </button>
+                  <button
                     onClick={() => setActiveTab('profile')}
                     className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-semibold whitespace-nowrap cursor-pointer transition"
                   >
-                    Go to Profile →
+                    Profile →
                   </button>
                   <button
                     onClick={() => setDismissedEmptyWarning(true)}
@@ -1147,13 +1411,96 @@ export default function App() {
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
                 <Zap className="w-4 h-4 fill-white" />
-                {autofillLoading ? 'Autofilling Form...' : '1-Click Autofill Active Form'}
+                {autofillLoading ? 'Filling...' : 'Fill Form'}
               </button>
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Fills fields safely using your saved profile</span>
+                <span>Fills all your details into the form</span>
               </div>
             </div>
+
+            {/* Auto-Detected Missing Fields on Page (Asks customer to fill & arranges in specific area) */}
+            {detectedUnfilledFields.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/50 border border-indigo-500/40 shadow-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    <h4 className="text-xs font-bold text-white">Missing Fields on Page</h4>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-cyan-300 font-semibold border border-indigo-500/30">
+                      {detectedUnfilledFields.length} missing
+                    </span>
+                    <button
+                      onClick={() => setDetectedUnfilledFields([])}
+                      className="text-slate-400 hover:text-slate-200 p-0.5 rounded transition cursor-pointer"
+                      title="Dismiss"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-300">
+                  Fill here once — we save them to your profile and fill the form now:
+                </p>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1 no-scrollbar">
+                  {detectedUnfilledFields.map((field) => {
+                    const categoryColors: Record<string, string> = {
+                      work: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                      education: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+                      links: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+                      eeo: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+                      contact: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+                    };
+                    const badgeClass = categoryColors[field.category] || categoryColors.contact;
+
+                    return (
+                      <div
+                        key={field.id}
+                        className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1.5 hover:border-indigo-500/30 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-white tracking-tight">{field.label}</span>
+                          <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold border ${badgeClass}`}>
+                            {field.category}
+                          </span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <input
+                            type={field.type === 'password' ? 'password' : 'text'}
+                            value={missingFieldInputs[field.id] || ''}
+                            onChange={(e) => setMissingFieldInputs({ ...missingFieldInputs, [field.id]: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveAndFillDetectedField(field);
+                            }}
+                            placeholder={field.placeholder ? `e.g. ${field.placeholder}` : `Type ${field.label}...`}
+                            className="flex-1 text-xs px-2.5 py-1.5 rounded-md bg-slate-950 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                          />
+                          <button
+                            onClick={() => handleSaveAndFillDetectedField(field)}
+                            disabled={!missingFieldInputs[field.id]?.trim()}
+                            className="px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer disabled:opacity-40 transition whitespace-nowrap shadow-sm"
+                          >
+                            Save & Fill
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {detectedUnfilledFields.length > 1 && (
+                  <button
+                    onClick={handleSaveAndFillAllDetected}
+                    className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
+                  >
+                    <span>Save & Fill All Entered</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* AI Custom Question Responder */}
             <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
@@ -1204,7 +1551,7 @@ export default function App() {
                 className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 cursor-pointer shadow-md shadow-indigo-600/20"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                {aiLoading ? 'Crafting answer...' : 'Generate Answer'}
+                {aiLoading ? 'Writing...' : 'Write Answer'}
               </button>
 
               {/* Generated Result Output */}
@@ -1286,8 +1633,62 @@ export default function App() {
                 onClick={handleSaveProfile}
                 className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-1.5 active:scale-95"
               >
-                <Zap className="w-3.5 h-3.5 fill-white" /> Save & Autofill Now
+                <Zap className="w-3.5 h-3.5 fill-white" /> Save & Fill Form
               </button>
+            </div>
+
+            {/* Excel & CV Import / Export Card (Auto-arranges all data into specific sections) */}
+            <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-cyan-950/50 border border-indigo-500/30 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-white">Excel & CV Import / Export</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30">
+                  Auto-Arranges Data
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Upload your <b>CV / Resume</b> or edit via <b>Excel</b>. All data automatically arranges into the exact sections below.
+              </p>
+
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                {/* Upload CV / Resume */}
+                <button
+                  type="button"
+                  onClick={() => cvFileInputRef.current?.click()}
+                  disabled={isExtractingCv}
+                  className="py-2 px-2 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-cyan-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  title="Upload PDF, DOCX, or TXT resume to auto-fill your profile"
+                >
+                  <FileText className="w-4 h-4 text-cyan-300" />
+                  <span>{isExtractingCv ? 'Reading...' : 'Upload CV'}</span>
+                </button>
+
+                {/* Export Excel Template */}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="py-2 px-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition active:scale-95 cursor-pointer"
+                  title="Download CSV template that opens in Excel with your current details"
+                >
+                  <Download className="w-4 h-4 text-indigo-400" />
+                  <span>Export Excel</span>
+                </button>
+
+                {/* Upload Excel File */}
+                <button
+                  type="button"
+                  onClick={() => excelFileInputRef.current?.click()}
+                  disabled={isImportingExcel}
+                  className="py-2 px-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  title="Upload filled Excel/CSV file to auto-arrange all fields"
+                >
+                  <UploadCloud className="w-4 h-4 text-emerald-400" />
+                  <span>{isImportingExcel ? 'Importing...' : 'Upload Excel'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Category Navigation Pills */}
@@ -1923,7 +2324,7 @@ export default function App() {
                 className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-semibold shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                {coverLoading ? 'Writing...' : 'Generate Letter'}
+                {coverLoading ? 'Writing...' : 'Write Cover Letter'}
               </button>
             </div>
 
@@ -2730,10 +3131,28 @@ export default function App() {
 }
 
 // Direct injection function executed inside the webpage by chrome.scripting
-function directAutofillScript(profile: any): number {
+function directAutofillScript(profile: any): { count: number; unfilled: any[] } {
   function setVal(el: any, val: any): boolean {
     if (!val || typeof val !== 'string' || !val.trim()) return false;
     const trimmed = val.trim();
+    try { el.focus(); } catch {}
+
+    if (el.tagName && el.tagName.toLowerCase() === 'select') {
+      const lower = trimmed.toLowerCase();
+      let found = false;
+      for (let i = 0; i < el.options.length; i++) {
+        const opt = el.options[i];
+        if (opt.value.toLowerCase() === lower || opt.text.toLowerCase() === lower || opt.text.toLowerCase().includes(lower)) {
+          el.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      try { el.blur(); } catch {}
+      return found;
+    }
 
     // 1. Reset React 16+ internal valueTracker
     if (el._valueTracker) {
@@ -2756,6 +3175,7 @@ function directAutofillScript(profile: any): number {
     // 3. Dispatch events
     el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    try { el.blur(); } catch {}
     return true;
   }
 
@@ -2801,11 +3221,57 @@ function directAutofillScript(profile: any): number {
     return parts.join(' ').toLowerCase();
   }
 
+  function getCleanLabel(el: HTMLElement): string {
+    if (el.id) {
+      const lbl = document.querySelector(`label[for="${el.id}"]`);
+      if (lbl && lbl.textContent?.trim()) return lbl.textContent.replace(/[*:]/g, '').trim();
+    }
+    const pl = el.closest('label');
+    if (pl && pl.textContent?.trim()) return pl.textContent.replace(/[*:]/g, '').trim();
+    const aria = el.getAttribute('aria-label');
+    if (aria && aria.trim()) return aria.replace(/[*:]/g, '').trim();
+    const ph = el.getAttribute('placeholder');
+    if (ph && ph.trim()) return ph.replace(/[*:]/g, '').trim();
+    const raw = el.getAttribute('name') || el.id || '';
+    if (raw) return raw.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+    return 'Input Field';
+  }
+
+  function getCategory(desc: string): string {
+    const d = desc.toLowerCase();
+    if (/school|university|college|degree|major|gpa|education/i.test(d)) return 'education';
+    if (/linkedin|github|portfolio|website|twitter/i.test(d)) return 'links';
+    if (/job|title|company|employer|experience|salary|notice|work|current|pin|security|key/i.test(d)) return 'work';
+    if (/gender|race|ethnicity|veteran|disabilit/i.test(d)) return 'eeo';
+    return 'contact';
+  }
+
   const inputs = Array.from(
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
       'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="image"]), textarea, select'
     )
   );
+
+  // Extract merged custom entries from both customAnswers and sectionCustomFields
+  const customEntries: Array<{ label: string; value: string }> = [];
+  if (profile.customAnswers) {
+    for (const [k, v] of Object.entries(profile.customAnswers)) {
+      if (v && typeof v === 'string' && (v as string).trim()) {
+        customEntries.push({ label: k.replace(/_/g, ' ').toLowerCase(), value: (v as string).trim() });
+      }
+    }
+  }
+  if (profile.sectionCustomFields) {
+    for (const fields of Object.values(profile.sectionCustomFields)) {
+      if (Array.isArray(fields)) {
+        for (const f of fields as any[]) {
+          if (f?.label && f?.value && typeof f.value === 'string' && f.value.trim()) {
+            customEntries.push({ label: f.label.toLowerCase().trim(), value: f.value.trim() });
+          }
+        }
+      }
+    }
+  }
 
   let count = 0;
 
@@ -2914,53 +3380,31 @@ function directAutofillScript(profile: any): number {
     }
     // Work Authorization Selects
     else if (/legally[\s_-]?authorized|authorized[\s_-]?to[\s_-]?work/i.test(desc)) {
-      if (input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (/yes/i.test(select.options[i].text) || /yes/i.test(select.options[i].value)) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
-        }
-      }
+      matched = setVal(input, 'Yes');
     }
     // Sponsorship Requirements Selects
     else if (/require[\s_-]?sponsorship|sponsorship/i.test(desc)) {
-      if (input.tagName.toLowerCase() === 'select') {
-        const select = input as HTMLSelectElement;
-        for (let i = 0; i < select.options.length; i++) {
-          if (/no/i.test(select.options[i].text) || /no/i.test(select.options[i].value)) {
-            select.selectedIndex = i;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            matched = true;
-            break;
-          }
+      matched = setVal(input, 'No');
+    }
+
+    // Custom Fields Matching (including PIN, password, security keys)
+    if (!matched && customEntries.length > 0) {
+      for (const entry of customEntries) {
+        const l = entry.label;
+        const v = entry.value;
+        if (!v) continue;
+        if (desc.includes(l) || l.includes(desc)) {
+          matched = setVal(input, v);
+          if (matched) break;
         }
-      }
-    }
-    // Password (if saved in custom answers)
-    else if (((input as HTMLInputElement).type === 'password' || /password|passwd|pwd/i.test(desc)) && profile.customAnswers?.['password']) {
-      matched = setVal(input, profile.customAnswers['password']);
-    }
-    // Custom Field & Missing Input Check (Fuzzy keyword and phrase matching)
-    else if (profile.customAnswers) {
-      for (const [key, value] of Object.entries(profile.customAnswers)) {
-        if (!value) continue;
-        const cleanKey = key.replace(/_/g, ' ').toLowerCase();
-        const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const normalizedDesc = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const keyWords = cleanKey.split(/\s+/).filter(w => w.length > 2);
-
-        const wordMatch = keyWords.length > 0 && keyWords.every(w => desc.includes(w));
-        const substrMatch = (cleanKey.length >= 3 && desc.includes(cleanKey)) || (normalizedKey.length >= 3 && normalizedDesc.includes(normalizedKey));
-
-        if (wordMatch || substrMatch) {
-          if (setVal(input, value as string)) {
-            matched = true;
-            break;
-          }
+        if (/pin|security|key|pass/i.test(desc) && /pin|security|key|pass/i.test(l)) {
+          matched = setVal(input, v);
+          if (matched) break;
+        }
+        const tokens = l.split(/\s+/).filter(w => w.length >= 3);
+        if (tokens.some(t => desc.includes(t))) {
+          matched = setVal(input, v);
+          if (matched) break;
         }
       }
     }
@@ -2975,5 +3419,25 @@ function directAutofillScript(profile: any): number {
     }
   }
 
-  return count;
+  // Scan remaining unfilled fields on this page
+  const unfilled: any[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < inputs.length; i++) {
+    const el = inputs[i];
+    if (el.value && el.value.trim().length > 0 && el.type !== 'radio' && el.type !== 'checkbox') continue;
+    const desc = getDesc(el);
+    const clean = getCleanLabel(el);
+    if (seen.has(clean.toLowerCase())) continue;
+    seen.add(clean.toLowerCase());
+    unfilled.push({
+      id: el.id || `field_${i}_${Date.now()}`,
+      name: el.getAttribute('name') || el.id || clean,
+      label: clean,
+      category: getCategory(desc + ' ' + clean),
+      type: el.getAttribute('type') || el.tagName.toLowerCase(),
+      placeholder: el.getAttribute('placeholder') || '',
+    });
+  }
+
+  return { count, unfilled: unfilled.slice(0, 15) };
 }
