@@ -68,7 +68,7 @@ const PROFILE_CATEGORIES = [
   { id: 'links', label: 'Links', icon: Globe },
   { id: 'work', label: 'Work', icon: Briefcase },
   { id: 'education', label: 'Education', icon: GraduationCap },
-  { id: 'eeo', label: 'Demographics', icon: ShieldCheck },
+  { id: 'eeo', label: 'Equal Opportunity', icon: ShieldCheck },
   { id: 'skills', label: 'Skills', icon: Zap },
 ] as const;
 
@@ -2138,11 +2138,11 @@ export default function App() {
               </div>
             )}
 
-            {/* CATEGORY 5: EEO / DEMOGRAPHICS */}
+            {/* CATEGORY 5: EQUAL OPPORTUNITY (EEO) */}
             {profileCategory === 'eeo' && (
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Demographics (EEO)</span>
+                  <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">Equal Opportunity (EEO)</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -2151,7 +2151,7 @@ export default function App() {
                       setNewSectionValue('');
                     }}
                     className="p-1 px-2 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
-                    title="Add custom demographic field"
+                    title="Add custom field"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add</span>

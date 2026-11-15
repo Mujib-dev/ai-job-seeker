@@ -371,7 +371,7 @@ export function parseExcelProfile(
         targetSection = 'education';
       } else if (catLower.includes('link') || catLower.includes('social') || catLower.includes('web')) {
         targetSection = 'links';
-      } else if (catLower.includes('eeo') || catLower.includes('demo') || catLower.includes('diversity')) {
+      } else if (catLower.includes('eeo') || catLower.includes('demo') || catLower.includes('diversity') || catLower.includes('equal') || catLower.includes('opportunity')) {
         targetSection = 'eeo';
       } else {
         targetSection = categorizeField(label);
