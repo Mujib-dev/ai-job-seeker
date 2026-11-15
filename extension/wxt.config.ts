@@ -8,7 +8,7 @@ export default defineConfig({
     description: '1-click job application autofill for Workday, Greenhouse & LinkedIn. AI interview answers & tailored cover letter copilot.',
     version: '1.1.4',
     author: 'LynkZone',
-    permissions: ['storage', 'activeTab', 'scripting'],
+    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     host_permissions: ['https://*/*', 'http://*/*', 'file://*/*'],
     icons: {
       16: 'icons/icon-16.png',

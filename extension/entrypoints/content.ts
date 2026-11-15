@@ -1,5 +1,5 @@
 import { defineContentScript } from 'wxt/sandbox';
-import { autofillForm, extractPageJobContext, detectUnfilledFields, setNativeValue, getFieldDescriptor, getCleanFieldLabel, formatDobValue } from '../lib/autofill';
+import { autofillForm, extractPageJobContext, detectUnfilledFields, setNativeValue, getFieldDescriptor, getCleanFieldLabel, formatDobValue, attachFileToInput } from '../lib/autofill';
 import { getUserProfile, incrementUsage, getUserSubscription, hasAnyProfileData } from '../lib/storage';
 import { APP_ICON_BASE64 } from '../lib/iconBase64';
 
@@ -68,11 +68,18 @@ export default defineContentScript({
           }
 
           if (target) {
-            let valToSet = value;
-            if (target.getAttribute('type') === 'date' || /birth|dob/i.test(fieldLabel || '') || /birth|dob/i.test(fieldName || '')) {
-              valToSet = formatDobValue(value, target, getFieldDescriptor(target));
+            if (target.getAttribute('type') === 'file' || target.type === 'file') {
+              const fileBase64 = request.fileBase64 || value;
+              const fileName = request.fileName || 'document.pdf';
+              const fileType = request.fileType || 'application/pdf';
+              attachFileToInput(target as HTMLInputElement, fileBase64, fileName, fileType);
+            } else {
+              let valToSet = value;
+              if (target.getAttribute('type') === 'date' || /birth|dob/i.test(fieldLabel || '') || /birth|dob/i.test(fieldName || '')) {
+                valToSet = formatDobValue(value, target, getFieldDescriptor(target));
+              }
+              setNativeValue(target, valToSet);
             }
-            setNativeValue(target, valToSet);
             target.style.transition = 'background-color 0.4s ease';
             target.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
             setTimeout(() => { target.style.backgroundColor = ''; }, 1500);

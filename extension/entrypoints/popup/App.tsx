@@ -30,7 +30,7 @@ import {
   FileSpreadsheet,
   UploadCloud,
 } from 'lucide-react';
-import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription, DetectedField } from '../../lib/types';
+import { UserProfile, DEFAULT_USER_PROFILE, JobApplication, UserSubscription, DetectedField, SavedDocument } from '../../lib/types';
 import {
   getUserProfile,
   saveUserProfile,
@@ -149,9 +149,12 @@ export default function App() {
   const [activatingLicense, setActivatingLicense] = useState(false);
   const [showFloatingWidget, setShowFloatingWidget] = useState(true);
 
-  // CV & Excel Import/Export State
+  // Document, CV & Excel Refs
   const cvFileInputRef = React.useRef<HTMLInputElement>(null);
   const excelFileInputRef = React.useRef<HTMLInputElement>(null);
+  const dmcFileInputRef = React.useRef<HTMLInputElement>(null);
+  const cnicDocFileInputRef = React.useRef<HTMLInputElement>(null);
+  const photoFileInputRef = React.useRef<HTMLInputElement>(null);
   const [isExtractingCv, setIsExtractingCv] = useState(false);
   const [isImportingExcel, setIsImportingExcel] = useState(false);
 
@@ -489,6 +492,30 @@ export default function App() {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tabId = tabs?.[0]?.id;
         if (!tabId) return;
+        const isFile = field.type === 'file' || /dmc|file|upload|document|photo|picture|cnic/i.test(field.label);
+        let fileBase64 = '';
+        let fileName = '';
+        let fileType = '';
+
+        if (isFile) {
+          if (/dmc|marksheet|transcript|ssc|hssc|academic|matric/i.test(field.label)) {
+            const doc = updated.documents?.dmc || updated.documents?.sscDmc || updated.documents?.hsscDmc;
+            if (doc) {
+              fileBase64 = doc.base64;
+              fileName = doc.name;
+              fileType = doc.type;
+            }
+          } else if (/cnic|id/i.test(field.label) && updated.documents?.cnicDoc) {
+            fileBase64 = updated.documents.cnicDoc.base64;
+            fileName = updated.documents.cnicDoc.name;
+            fileType = updated.documents.cnicDoc.type;
+          } else if (/photo|picture/i.test(field.label) && updated.documents?.photo) {
+            fileBase64 = updated.documents.photo.base64;
+            fileName = updated.documents.photo.name;
+            fileType = updated.documents.photo.type;
+          }
+        }
+
         chrome.tabs.sendMessage(
           tabId,
           {
@@ -497,6 +524,9 @@ export default function App() {
             fieldLabel: field.label,
             value: val,
             selector: field.selector,
+            fileBase64,
+            fileName,
+            fileType,
           },
           () => {
             chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updated });
@@ -652,6 +682,65 @@ export default function App() {
       setIsExtractingCv(false);
       if (e.target) e.target.value = '';
     }
+  };
+
+  // Admission & Job Document Handler (DMC, CNIC, Photo)
+  const handleSaveDocument = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    docType: 'dmc' | 'sscDmc' | 'hsscDmc' | 'cnicDoc' | 'photo',
+    title: string
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = reader.result as string;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      const newDoc: SavedDocument = {
+        id: docType,
+        title,
+        name: file.name,
+        type: file.type || 'application/pdf',
+        base64,
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const updated: UserProfile = {
+        ...profile,
+        documents: {
+          ...(profile.documents || {}),
+          [docType]: newDoc,
+        },
+      };
+
+      setProfile(updated);
+      await saveUserProfile(updated);
+      markDataEntered();
+      showToast(`✅ "${file.name}" saved! It will automatically fill on admission upload forms.`);
+
+      // Also auto-fill active page immediately
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const tabId = tabs?.[0]?.id;
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_AUTOFILL', profile: updated });
+          }
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleRemoveDocument = async (docType: 'dmc' | 'sscDmc' | 'hsscDmc' | 'cnicDoc' | 'photo') => {
+    const updatedDocs = { ...(profile.documents || {}) };
+    delete updatedDocs[docType];
+    const updated: UserProfile = { ...profile, documents: updatedDocs };
+    setProfile(updated);
+    await saveUserProfile(updated);
+    showToast('Document removed.');
   };
 
   // Handle AI Custom Answer
@@ -1122,6 +1211,27 @@ export default function App() {
         onChange={handleUploadExcel}
         className="hidden"
       />
+      <input
+        ref={dmcFileInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        onChange={(e) => handleSaveDocument(e, 'dmc', 'DMC / Marksheet')}
+        className="hidden"
+      />
+      <input
+        ref={cnicDocFileInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        onChange={(e) => handleSaveDocument(e, 'cnicDoc', 'CNIC Document')}
+        className="hidden"
+      />
+      <input
+        ref={photoFileInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png"
+        onChange={(e) => handleSaveDocument(e, 'photo', 'Passport Photo')}
+        className="hidden"
+      />
       {/* Toast Feedback Notification */}
       {feedback && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg shadow-indigo-500/25 flex items-center gap-2 animate-bounce font-medium">
@@ -1427,6 +1537,32 @@ export default function App() {
                 <span>Fills all your details into the form</span>
               </div>
             </div>
+
+            {/* DMC Auto-Upload Status Banner */}
+            {profile.documents?.dmc ? (
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span className="truncate"><b>DMC Ready:</b> {profile.documents.dmc.name}</span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Auto-Fills
+                </span>
+              </div>
+            ) : (
+              <div
+                onClick={() => dmcFileInputRef.current?.click()}
+                className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-500/10 border border-dashed border-indigo-500/40 text-cyan-200 text-xs hover:bg-indigo-500/20 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-cyan-400" />
+                  <span>Upload DMC once to auto-attach on admission forms</span>
+                </div>
+                <span className="text-[10px] font-bold text-white bg-indigo-600 px-2 py-0.5 rounded">
+                  Upload DMC
+                </span>
+              </div>
+            )}
 
             {/* Auto-Detected Missing Fields on Page (Asks customer to fill & arranges in specific area) */}
             {detectedUnfilledFields.length > 0 && (
@@ -2156,6 +2292,120 @@ export default function App() {
                       <option value="no">No</option>
                       <option value="yes">Yes</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Admission & Job Documents for Auto-Upload (DMC, CNIC, Photo) */}
+                <div className="pt-2 border-t border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">
+                      Auto-Upload Documents (DMC / CNIC / Photo)
+                    </span>
+                    <span className="text-[10px] text-slate-400">Auto-attaches on forms</span>
+                  </div>
+
+                  {/* DMC / Marksheet */}
+                  <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-200">DMC / Detailed Marks Certificate</span>
+                      {profile.documents?.dmc ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                          Ready
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">
+                          Empty
+                        </span>
+                      )}
+                    </div>
+                    {profile.documents?.dmc ? (
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-1.5 truncate text-xs text-emerald-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                          <span className="truncate">{profile.documents.dmc.name}</span>
+                          <span className="text-[10px] text-slate-400">({Math.round(profile.documents.dmc.size / 1024)} KB)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => dmcFileInputRef.current?.click()}
+                            className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium cursor-pointer"
+                          >
+                            Change
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDocument('dmc')}
+                            className="p-1 rounded text-slate-400 hover:text-red-400 transition cursor-pointer"
+                            title="Remove DMC"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => dmcFileInputRef.current?.click()}
+                        className="w-full py-1.5 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-cyan-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Upload DMC (PDF, JPG, Doc)</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* CNIC and Photo in 2-column grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* CNIC Copy */}
+                    <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                      <span className="text-[11px] font-semibold text-slate-200 block">CNIC / ID Document</span>
+                      {profile.documents?.cnicDoc ? (
+                        <div className="flex items-center justify-between pt-0.5">
+                          <span className="text-[11px] text-emerald-400 truncate">{profile.documents.cnicDoc.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDocument('cnicDoc')}
+                            className="text-slate-400 hover:text-red-400 p-0.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => cnicDocFileInputRef.current?.click()}
+                          className="w-full py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-semibold border border-slate-800"
+                        >
+                          Upload CNIC
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Passport Photo */}
+                    <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                      <span className="text-[11px] font-semibold text-slate-200 block">Passport Photo</span>
+                      {profile.documents?.photo ? (
+                        <div className="flex items-center justify-between pt-0.5">
+                          <span className="text-[11px] text-emerald-400 truncate">{profile.documents.photo.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDocument('photo')}
+                            className="text-slate-400 hover:text-red-400 p-0.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => photoFileInputRef.current?.click()}
+                          className="w-full py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-semibold border border-slate-800"
+                        >
+                          Upload Photo
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -3245,6 +3495,24 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
     return `${year}-${month}-${day}`;
   }
 
+  function attachFile(input: HTMLInputElement, base64: string, fileName: string, mimeType = 'application/pdf'): boolean {
+    try {
+      const byteChars = atob(base64);
+      const byteNums = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteNums], { type: mimeType });
+      const file = new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function getDesc(el: HTMLElement): string {
     const parts = [
       el.id || '',
@@ -3491,6 +3759,140 @@ function directAutofillScript(profile: any): { count: number; unfilled: any[] } 
     // Salary
     else if (/salary|compensation|desired[\s_-]?pay/i.test(desc)) {
       matched = setVal(input, profile.work?.salaryExpectations);
+    }
+    // --- Document File Upload Inputs (DMC, SSC DMC, HSSC DMC, CNIC, Photo, Resume) ---
+    else if ((input as HTMLInputElement).type === 'file') {
+      const fileInput = input as HTMLInputElement;
+      if (!fileInput.files || fileInput.files.length === 0) {
+        if (/dmc|mark[\s_-]?sheet|transcript|result[\s_-]?card|academic|matric|ssc|hssc|inter|fsc|degree|certif/i.test(desc)) {
+          if (/ssc|matric/i.test(desc) && (profile.documents?.sscDmc || profile.qualifications?.ssc?.documentBase64)) {
+            const doc = profile.documents?.sscDmc;
+            matched = attachFile(
+              fileInput,
+              doc?.base64 || profile.qualifications?.ssc?.documentBase64 || '',
+              doc?.name || profile.qualifications?.ssc?.documentFileName || 'ssc_matric_dmc.pdf',
+              doc?.type || 'application/pdf'
+            );
+          } else if (/hssc|intermediate|inter\b|fsc|f\.sc/i.test(desc) && (profile.documents?.hsscDmc || profile.qualifications?.hssc?.documentBase64)) {
+            const doc = profile.documents?.hsscDmc;
+            matched = attachFile(
+              fileInput,
+              doc?.base64 || profile.qualifications?.hssc?.documentBase64 || '',
+              doc?.name || profile.qualifications?.hssc?.documentFileName || 'hssc_fsc_dmc.pdf',
+              doc?.type || 'application/pdf'
+            );
+          } else {
+            const doc = profile.documents?.dmc || profile.documents?.sscDmc || profile.documents?.hsscDmc;
+            if (doc?.base64) {
+              matched = attachFile(fileInput, doc.base64, doc.name || 'dmc.pdf', doc.type || 'application/pdf');
+            } else if (profile.qualifications?.ssc?.documentBase64) {
+              matched = attachFile(fileInput, profile.qualifications.ssc.documentBase64, profile.qualifications.ssc.documentFileName || 'dmc.pdf');
+            }
+          }
+        } else if (/cnic|nicop|b[\s_-]?form|national[\s_-]?id|identity[\s_-]?card|id[\s_-]?copy/i.test(desc)) {
+          const doc = profile.documents?.cnicDoc;
+          if (doc?.base64) {
+            matched = attachFile(fileInput, doc.base64, doc.name || 'cnic.pdf', doc.type || 'application/pdf');
+          }
+        } else if (/photo|picture|image|passport[\s_-]?size|avatar|profile[\s_-]?pic/i.test(desc)) {
+          const doc = profile.documents?.photo;
+          if (doc?.base64) {
+            matched = attachFile(fileInput, doc.base64, doc.name || 'photo.jpg', doc.type || 'image/jpeg');
+          }
+        } else if (/resume|cv\b|curriculum|vitae|bio[\s_-]?data/i.test(desc)) {
+          const doc = profile.documents?.resume || profile.savedResume;
+          if (doc?.base64) {
+            matched = attachFile(fileInput, doc.base64, doc.name || 'resume.pdf', doc.type || 'application/pdf');
+          }
+        }
+      }
+    }
+    // --- SSC / Matric / 10th Level Fields ---
+    else if (/ssc|matric|10th/i.test(desc)) {
+      const ssc = profile.qualifications?.ssc;
+      if (ssc) {
+        if (/total|max/i.test(desc) && ssc.totalMarks) {
+          matched = setVal(input, ssc.totalMarks);
+        } else if (/obtain/i.test(desc) && ssc.obtainedMarks) {
+          matched = setVal(input, ssc.obtainedMarks);
+        } else if (/board|bise|inst/i.test(desc) && ssc.boardOrUniversity) {
+          matched = setVal(input, ssc.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && ssc.passingYear) {
+          matched = setVal(input, ssc.passingYear);
+        } else if (/roll/i.test(desc) && ssc.rollNumber) {
+          matched = setVal(input, ssc.rollNumber);
+        } else if (/grade|div/i.test(desc) && ssc.gradeOrDivision) {
+          matched = setVal(input, ssc.gradeOrDivision);
+        } else if (/major|group|subject/i.test(desc) && ssc.majorSubjects) {
+          matched = setVal(input, ssc.majorSubjects);
+        } else if (/degree|title|cert/i.test(desc) && ssc.degreeTitle) {
+          matched = setVal(input, ssc.degreeTitle);
+        }
+      }
+    }
+    // --- HSSC / Intermediate / FSc / 12th Level Fields ---
+    else if (/hssc|intermediate|inter\b|fsc|f\.sc|\bics\b|12th/i.test(desc)) {
+      const hssc = profile.qualifications?.hssc;
+      if (hssc) {
+        if (/total|max/i.test(desc) && hssc.totalMarks) {
+          matched = setVal(input, hssc.totalMarks);
+        } else if (/obtain/i.test(desc) && hssc.obtainedMarks) {
+          matched = setVal(input, hssc.obtainedMarks);
+        } else if (/board|bise|inst/i.test(desc) && hssc.boardOrUniversity) {
+          matched = setVal(input, hssc.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && hssc.passingYear) {
+          matched = setVal(input, hssc.passingYear);
+        } else if (/roll/i.test(desc) && hssc.rollNumber) {
+          matched = setVal(input, hssc.rollNumber);
+        } else if (/grade|div/i.test(desc) && hssc.gradeOrDivision) {
+          matched = setVal(input, hssc.gradeOrDivision);
+        } else if (/major|group|subject/i.test(desc) && hssc.majorSubjects) {
+          matched = setVal(input, hssc.majorSubjects);
+        } else if (/degree|title|cert/i.test(desc) && hssc.degreeTitle) {
+          matched = setVal(input, hssc.degreeTitle);
+        }
+      }
+    }
+    // --- Bachelor / BS / 14 or 16 Years Fields ---
+    else if (/bachelor|graduat|14[\s_-]?year|16[\s_-]?year|\bbs\b|degree/i.test(desc) && !/school|master/i.test(desc)) {
+      const bach = profile.qualifications?.bachelor;
+      if (bach) {
+        if (/total|cgpa|max/i.test(desc) && bach.totalMarks) {
+          matched = setVal(input, bach.totalMarks);
+        } else if (/obtain|cgpa/i.test(desc) && bach.obtainedMarks) {
+          matched = setVal(input, bach.obtainedMarks);
+        } else if (/univ|inst/i.test(desc) && bach.boardOrUniversity) {
+          matched = setVal(input, bach.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && bach.passingYear) {
+          matched = setVal(input, bach.passingYear);
+        } else if (/roll|reg/i.test(desc) && bach.rollNumber) {
+          matched = setVal(input, bach.rollNumber);
+        } else if (/grade|div/i.test(desc) && bach.gradeOrDivision) {
+          matched = setVal(input, bach.gradeOrDivision);
+        } else if (/major|field|subject/i.test(desc) && bach.majorSubjects) {
+          matched = setVal(input, bach.majorSubjects);
+        }
+      }
+    }
+    // --- General Obtained Marks ---
+    else if (/marks[\s_-]?obtained|obtained[\s_-]?marks/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.obtainedMarks || profile.qualifications?.hssc?.obtainedMarks || profile.customAnswers?.['obtained_marks'] || '';
+      if (val) matched = setVal(input, val);
+    }
+    // --- General Total Marks ---
+    else if (/total[\s_-]?marks|max[\s_-]?marks/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.totalMarks || profile.qualifications?.hssc?.totalMarks || '1100';
+      if (val) matched = setVal(input, val);
+    }
+    // --- General Board / BISE ---
+    else if (/bise|examining[\s_-]?body|board[\s_-]?name/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.boardOrUniversity || profile.qualifications?.hssc?.boardOrUniversity || '';
+      if (val) matched = setVal(input, val);
+    }
+    // --- General Roll Number ---
+    else if (/roll[\s_-]?no|roll[\s_-]?number/i.test(desc) && !/bank|challan|payment/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.rollNumber || profile.qualifications?.hssc?.rollNumber || profile.customAnswers?.['roll_no'] || '';
+      if (val) matched = setVal(input, val);
     }
     // School
     else if (/school|university|college/i.test(desc)) {

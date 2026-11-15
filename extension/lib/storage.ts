@@ -22,6 +22,8 @@ export async function getUserProfile(): Promise<UserProfile> {
       eeo: { ...DEFAULT_USER_PROFILE.eeo, ...(saved.eeo || {}) },
       skills: Array.isArray(saved.skills) ? saved.skills : DEFAULT_USER_PROFILE.skills,
       certifications: Array.isArray(saved.certifications) ? saved.certifications : (DEFAULT_USER_PROFILE.certifications || []),
+      qualifications: { ...(DEFAULT_USER_PROFILE.qualifications || {}), ...(saved.qualifications || {}) },
+      documents: { ...(DEFAULT_USER_PROFILE.documents || {}), ...(saved.documents || {}) },
       sectionCustomFields: saved.sectionCustomFields || {},
       customAnswers: { ...DEFAULT_USER_PROFILE.customAnswers, ...(saved.customAnswers || {}) },
     };
@@ -185,6 +187,8 @@ export function hasAnyProfileData(p?: UserProfile | null): boolean {
   }
   if (Array.isArray(p.skills) && p.skills.length > 0) return true;
   if (Array.isArray(p.certifications) && p.certifications.length > 0) return true;
+  if (p.documents && Object.values(p.documents).some((d) => Boolean(d?.base64))) return true;
+  if (p.qualifications && Object.values(p.qualifications).some((q) => Boolean(q?.obtainedMarks || q?.boardOrUniversity || q?.rollNumber))) return true;
   if (p.customAnswers && Object.values(p.customAnswers).some((v) => Boolean(v?.trim()))) return true;
   if (p.sectionCustomFields && Object.values(p.sectionCustomFields).some((arr) => arr?.some?.((f) => Boolean(f?.value?.trim())))) return true;
 

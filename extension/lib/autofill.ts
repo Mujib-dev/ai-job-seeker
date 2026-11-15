@@ -7,6 +7,36 @@ export interface AutofillResult {
 }
 
 // Dispatches standard DOM events so modern frameworks (React, Angular, Vue, Svelte, Workday) register value changes
+/**
+ * Attaches a base64 encoded document to an <input type="file"> via standard DataTransfer API.
+ */
+export function attachFileToInput(
+  input: HTMLInputElement,
+  base64: string,
+  fileName: string,
+  mimeType = 'application/pdf'
+): boolean {
+  try {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const blob = new Blob([byteNumbers], { type: mimeType });
+    const file = new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
+
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    return true;
+  } catch (e) {
+    console.warn('File attach error:', e);
+    return false;
+  }
+}
+
 export function setNativeValue(
   element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
   value: string | undefined | null
@@ -160,7 +190,7 @@ export function formatDobValue(dobVal: string, input: HTMLElement, desc: string)
 // Automatically categorizes any input into the specific area where it is needed
 export function categorizeField(desc: string): 'contact' | 'links' | 'work' | 'education' | 'eeo' {
   const d = desc.toLowerCase();
-  if (/school|university|college|degree|major|gpa|graduation|education|institution|discipline|field[\s_-]?of[\s_-]?study/i.test(d)) {
+  if (/school|university|college|degree|major|gpa|graduation|education|institution|discipline|field[\s_-]?of[\s_-]?study|ssc|hssc|matric|inter|fsc|dmc|marks|roll/i.test(d)) {
     return 'education';
   }
   if (/linkedin|github|portfolio|website|twitter|x\.com|blog|social|personal[\s_-]?site|repo/i.test(d)) {
@@ -590,6 +620,148 @@ export function autofillForm(profile: UserProfile): AutofillResult {
     // Notice Period
     else if (/notice[\s_-]?period|start[\s_-]?date|availability/i.test(desc)) {
       matched = setNativeValue(input, profile.work?.noticePeriod);
+    }
+    // --- Document File Upload Inputs (DMC, SSC DMC, HSSC DMC, CNIC, Photo, Resume) ---
+    else if ((input as HTMLInputElement).type === 'file') {
+      const fileInput = input as HTMLInputElement;
+      if (!fileInput.files || fileInput.files.length === 0) {
+        // 1. DMC / Marksheet / Academic Document
+        if (/dmc|mark[\s_-]?sheet|transcript|result[\s_-]?card|academic|matric|ssc|hssc|inter|fsc|degree|certif/i.test(desc)) {
+          if (/ssc|matric/i.test(desc) && (profile.documents?.sscDmc || profile.qualifications?.ssc?.documentBase64)) {
+            const doc = profile.documents?.sscDmc;
+            matched = attachFileToInput(
+              fileInput,
+              doc?.base64 || profile.qualifications?.ssc?.documentBase64 || '',
+              doc?.name || profile.qualifications?.ssc?.documentFileName || 'ssc_matric_dmc.pdf',
+              doc?.type || 'application/pdf'
+            );
+          } else if (/hssc|intermediate|inter\b|fsc|f\.sc/i.test(desc) && (profile.documents?.hsscDmc || profile.qualifications?.hssc?.documentBase64)) {
+            const doc = profile.documents?.hsscDmc;
+            matched = attachFileToInput(
+              fileInput,
+              doc?.base64 || profile.qualifications?.hssc?.documentBase64 || '',
+              doc?.name || profile.qualifications?.hssc?.documentFileName || 'hssc_fsc_dmc.pdf',
+              doc?.type || 'application/pdf'
+            );
+          } else {
+            // General DMC
+            const doc = profile.documents?.dmc || profile.documents?.sscDmc || profile.documents?.hsscDmc;
+            if (doc?.base64) {
+              matched = attachFileToInput(fileInput, doc.base64, doc.name || 'dmc.pdf', doc.type || 'application/pdf');
+            } else if (profile.qualifications?.ssc?.documentBase64) {
+              matched = attachFileToInput(fileInput, profile.qualifications.ssc.documentBase64, profile.qualifications.ssc.documentFileName || 'dmc.pdf');
+            }
+          }
+        }
+        // 2. CNIC / National ID / B-Form Document
+        else if (/cnic|nicop|b[\s_-]?form|national[\s_-]?id|identity[\s_-]?card|id[\s_-]?copy/i.test(desc)) {
+          const doc = profile.documents?.cnicDoc;
+          if (doc?.base64) {
+            matched = attachFileToInput(fileInput, doc.base64, doc.name || 'cnic.pdf', doc.type || 'application/pdf');
+          }
+        }
+        // 3. Photo / Picture / Passport size photo
+        else if (/photo|picture|image|passport[\s_-]?size|avatar|profile[\s_-]?pic/i.test(desc)) {
+          const doc = profile.documents?.photo;
+          if (doc?.base64) {
+            matched = attachFileToInput(fileInput, doc.base64, doc.name || 'photo.jpg', doc.type || 'image/jpeg');
+          }
+        }
+        // 4. Resume / CV
+        else if (/resume|cv\b|curriculum|vitae|bio[\s_-]?data/i.test(desc)) {
+          const doc = profile.documents?.resume || profile.savedResume;
+          if (doc?.base64) {
+            matched = attachFileToInput(fileInput, doc.base64, doc.name || 'resume.pdf', doc.type || 'application/pdf');
+          }
+        }
+      }
+    }
+    // --- SSC / Matric / 10th Level Fields ---
+    else if (/ssc|matric|10th/i.test(desc)) {
+      const ssc = profile.qualifications?.ssc;
+      if (ssc) {
+        if (/total|max/i.test(desc) && ssc.totalMarks) {
+          matched = setNativeValue(input, ssc.totalMarks);
+        } else if (/obtain/i.test(desc) && ssc.obtainedMarks) {
+          matched = setNativeValue(input, ssc.obtainedMarks);
+        } else if (/board|bise|inst/i.test(desc) && ssc.boardOrUniversity) {
+          matched = setNativeValue(input, ssc.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && ssc.passingYear) {
+          matched = setNativeValue(input, ssc.passingYear);
+        } else if (/roll/i.test(desc) && ssc.rollNumber) {
+          matched = setNativeValue(input, ssc.rollNumber);
+        } else if (/grade|div/i.test(desc) && ssc.gradeOrDivision) {
+          matched = setNativeValue(input, ssc.gradeOrDivision);
+        } else if (/major|group|subject/i.test(desc) && ssc.majorSubjects) {
+          matched = setNativeValue(input, ssc.majorSubjects);
+        } else if (/degree|title|cert/i.test(desc) && ssc.degreeTitle) {
+          matched = setNativeValue(input, ssc.degreeTitle);
+        }
+      }
+    }
+    // --- HSSC / Intermediate / FSc / 12th Level Fields ---
+    else if (/hssc|intermediate|inter\b|fsc|f\.sc|\bics\b|12th/i.test(desc)) {
+      const hssc = profile.qualifications?.hssc;
+      if (hssc) {
+        if (/total|max/i.test(desc) && hssc.totalMarks) {
+          matched = setNativeValue(input, hssc.totalMarks);
+        } else if (/obtain/i.test(desc) && hssc.obtainedMarks) {
+          matched = setNativeValue(input, hssc.obtainedMarks);
+        } else if (/board|bise|inst/i.test(desc) && hssc.boardOrUniversity) {
+          matched = setNativeValue(input, hssc.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && hssc.passingYear) {
+          matched = setNativeValue(input, hssc.passingYear);
+        } else if (/roll/i.test(desc) && hssc.rollNumber) {
+          matched = setNativeValue(input, hssc.rollNumber);
+        } else if (/grade|div/i.test(desc) && hssc.gradeOrDivision) {
+          matched = setNativeValue(input, hssc.gradeOrDivision);
+        } else if (/major|group|subject/i.test(desc) && hssc.majorSubjects) {
+          matched = setNativeValue(input, hssc.majorSubjects);
+        } else if (/degree|title|cert/i.test(desc) && hssc.degreeTitle) {
+          matched = setNativeValue(input, hssc.degreeTitle);
+        }
+      }
+    }
+    // --- Bachelor / BS / 14 or 16 Years Fields ---
+    else if (/bachelor|graduat|14[\s_-]?year|16[\s_-]?year|\bbs\b|degree/i.test(desc) && !/school|master/i.test(desc)) {
+      const bach = profile.qualifications?.bachelor;
+      if (bach) {
+        if (/total|cgpa|max/i.test(desc) && bach.totalMarks) {
+          matched = setNativeValue(input, bach.totalMarks);
+        } else if (/obtain|cgpa/i.test(desc) && bach.obtainedMarks) {
+          matched = setNativeValue(input, bach.obtainedMarks);
+        } else if (/univ|inst/i.test(desc) && bach.boardOrUniversity) {
+          matched = setNativeValue(input, bach.boardOrUniversity);
+        } else if (/year|pass/i.test(desc) && bach.passingYear) {
+          matched = setNativeValue(input, bach.passingYear);
+        } else if (/roll|reg/i.test(desc) && bach.rollNumber) {
+          matched = setNativeValue(input, bach.rollNumber);
+        } else if (/grade|div/i.test(desc) && bach.gradeOrDivision) {
+          matched = setNativeValue(input, bach.gradeOrDivision);
+        } else if (/major|field|subject/i.test(desc) && bach.majorSubjects) {
+          matched = setNativeValue(input, bach.majorSubjects);
+        }
+      }
+    }
+    // --- General Obtained Marks (when row is not explicitly labeled ssc/hssc) ---
+    else if (/marks[\s_-]?obtained|obtained[\s_-]?marks/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.obtainedMarks || profile.qualifications?.hssc?.obtainedMarks || profile.customAnswers?.['obtained_marks'] || '';
+      if (val) matched = setNativeValue(input, val);
+    }
+    // --- General Total Marks ---
+    else if (/total[\s_-]?marks|max[\s_-]?marks/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.totalMarks || profile.qualifications?.hssc?.totalMarks || '1100';
+      if (val) matched = setNativeValue(input, val);
+    }
+    // --- General Board / BISE ---
+    else if (/bise|examining[\s_-]?body|board[\s_-]?name/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.boardOrUniversity || profile.qualifications?.hssc?.boardOrUniversity || '';
+      if (val) matched = setNativeValue(input, val);
+    }
+    // --- General Roll Number ---
+    else if (/roll[\s_-]?no|roll[\s_-]?number/i.test(desc) && !/bank|challan|payment/i.test(desc)) {
+      const val = profile.qualifications?.ssc?.rollNumber || profile.qualifications?.hssc?.rollNumber || profile.customAnswers?.['roll_no'] || '';
+      if (val) matched = setNativeValue(input, val);
     }
     // Education / School
     else if (/school|university|college|institution/i.test(desc)) {

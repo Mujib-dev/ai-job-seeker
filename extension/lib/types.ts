@@ -15,6 +15,31 @@ export interface DetectedField {
   selector?: string;
 }
 
+export interface SavedDocument {
+  id: string; // 'dmc' | 'ssc_dmc' | 'hssc_dmc' | 'cnic' | 'photo' | 'resume'
+  title: string;
+  name: string;
+  type: string;
+  base64: string;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface AcademicQualification {
+  level: 'ssc' | 'hssc' | 'bachelor' | 'master' | 'other';
+  degreeTitle?: string;
+  boardOrUniversity?: string;
+  passingYear?: string;
+  totalMarks?: string;
+  obtainedMarks?: string;
+  percentage?: string;
+  gradeOrDivision?: string;
+  majorSubjects?: string;
+  rollNumber?: string;
+  documentFileName?: string;
+  documentBase64?: string;
+}
+
 export interface UserProfile {
   personal: {
     firstName: string;
@@ -66,6 +91,26 @@ export interface UserProfile {
   };
   skills: string[];
   certifications: string[];
+  qualifications?: {
+    ssc?: AcademicQualification;
+    hssc?: AcademicQualification;
+    bachelor?: AcademicQualification;
+    master?: AcademicQualification;
+  };
+  documents?: {
+    dmc?: SavedDocument;
+    sscDmc?: SavedDocument;
+    hsscDmc?: SavedDocument;
+    cnicDoc?: SavedDocument;
+    photo?: SavedDocument;
+    resume?: SavedDocument;
+  };
+  savedResume?: {
+    name: string;
+    type: string;
+    base64: string;
+    lastUpdated: string;
+  };
   sectionCustomFields?: Record<string, CustomSectionField[]>;
   customAnswers: Record<string, string>;
 }
@@ -141,6 +186,42 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   },
   skills: [],
   certifications: [],
+  qualifications: {
+    ssc: {
+      level: 'ssc',
+      degreeTitle: 'Matric / SSC',
+      boardOrUniversity: '',
+      passingYear: '',
+      totalMarks: '1100',
+      obtainedMarks: '',
+      gradeOrDivision: '',
+      majorSubjects: 'Science',
+      rollNumber: '',
+    },
+    hssc: {
+      level: 'hssc',
+      degreeTitle: 'FSc / HSSC',
+      boardOrUniversity: '',
+      passingYear: '',
+      totalMarks: '1100',
+      obtainedMarks: '',
+      gradeOrDivision: '',
+      majorSubjects: 'Pre-Engineering',
+      rollNumber: '',
+    },
+    bachelor: {
+      level: 'bachelor',
+      degreeTitle: 'Bachelor / BS',
+      boardOrUniversity: '',
+      passingYear: '',
+      totalMarks: '4.0',
+      obtainedMarks: '',
+      gradeOrDivision: '',
+      majorSubjects: 'Computer Science',
+      rollNumber: '',
+    },
+  },
+  documents: {},
   sectionCustomFields: {},
   customAnswers: {},
 };
