@@ -140,22 +140,29 @@ function injectFloatingWidget() {
   host.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   host.style.touchAction = 'none';
 
-  // Restore saved position or default to bottom-left
+  // Restore saved position or default to bottom-right
   try {
     const saved = localStorage.getItem('ai_job_seeker_btn_pos');
     if (saved) {
       const { left, top } = JSON.parse(saved);
-      const safeX = Math.max(12, Math.min(window.innerWidth - 180, left));
-      const safeY = Math.max(12, Math.min(window.innerHeight - 60, top));
-      host.style.left = `${safeX}px`;
-      host.style.top = `${safeY}px`;
+      // If previous position was the old default bottom-left corner, reset to the new right-side default
+      const isOldDefaultLeft = left <= 32 && top >= window.innerHeight - 90;
+      if (isOldDefaultLeft) {
+        host.style.bottom = '24px';
+        host.style.right = '24px';
+      } else {
+        const safeX = Math.max(12, Math.min(window.innerWidth - 180, left));
+        const safeY = Math.max(12, Math.min(window.innerHeight - 60, top));
+        host.style.left = `${safeX}px`;
+        host.style.top = `${safeY}px`;
+      }
     } else {
       host.style.bottom = '24px';
-      host.style.left = '24px';
+      host.style.right = '24px';
     }
   } catch {
     host.style.bottom = '24px';
-    host.style.left = '24px';
+    host.style.right = '24px';
   }
 
   const shadow = host.attachShadow({ mode: 'open' });
@@ -207,7 +214,7 @@ function injectFloatingWidget() {
     .status-toast {
       position: absolute;
       bottom: 48px;
-      left: 0;
+      right: 0;
       background: #0f172a;
       color: #38bdf8;
       border: 1px solid #1e293b;
