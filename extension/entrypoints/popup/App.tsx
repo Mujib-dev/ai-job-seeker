@@ -3035,7 +3035,7 @@ export default function App() {
 
       {/* Clean, Minimal Footer with In-Product Privacy Link */}
       <footer className="px-4 py-2 border-t border-slate-800/80 bg-[#090d16] text-[10px] text-slate-500 flex items-center justify-between">
-        <span>LynkZone • AI Job Seeker v1.1.4</span>
+        <span>LynkZone • AI Job Seeker v1.1.5</span>
         <div className="flex items-center gap-3">
           <a
             href="https://ai-job-seeker-backend-jspe.onrender.com/privacy"

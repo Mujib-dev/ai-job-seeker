@@ -4,7 +4,7 @@ import { getUserProfile, incrementUsage, getUserSubscription, hasAnyProfileData 
 import { APP_ICON_BASE64 } from '../lib/iconBase64';
 
 export default defineContentScript({
-  matches: ['*://*/*', 'file://*/*'],
+  matches: ['*://*/*'],
   runAt: 'document_idle',
   main() {
     // 1. Listen for messages from Popup
